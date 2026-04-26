@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { setStoredWorkbook, toPublicWorkbook } from "@/lib/workbook-store";
-import { parseWorkbook } from "@/lib/xlsx-parser";
+import { parseWorkbook, looksGarbled } from "@/lib/xlsx-parser";
+import { fixRichTextCells } from "@/lib/ai-text-fixer";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,6 +18,47 @@ export async function POST(request: Request) {
     }
 
     const workbook = setStoredWorkbook(await parseWorkbook(await file.arrayBuffer()));
+
+    // Collect cells that need AI repair
+    const cellsNeedingRepair: Array<{ ref: string; field: "requirement" | "copyText" | "style"; raw: string }> = [];
+    const collectGarbledCells = (row: typeof workbook.rows[0] | undefined) => {
+      if (!row) return;
+      if (looksGarbled(row.requirement)) {
+        cellsNeedingRepair.push({ ref: `C${row.rowNumber}`, field: "requirement", raw: row.requirement });
+      }
+      if (looksGarbled(row.copyText)) {
+        cellsNeedingRepair.push({ ref: `F${row.rowNumber}`, field: "copyText", raw: row.copyText });
+      }
+      if (looksGarbled(row.style)) {
+        cellsNeedingRepair.push({ ref: `G${row.rowNumber}`, field: "style", raw: row.style });
+      }
+    };
+
+    collectGarbledCells(workbook.mainImageRow);
+    for (const row of workbook.rows) {
+      collectGarbledCells(row);
+    }
+
+    // Call AI once if any cells need repair
+    if (cellsNeedingRepair.length > 0) {
+      const fixedCells = await fixRichTextCells(cellsNeedingRepair);
+
+      // Apply fixes back to workbook rows
+      const applyFix = (row: typeof workbook.rows[0] | undefined) => {
+        if (!row) return;
+        const cRef = `C${row.rowNumber}`;
+        const fRef = `F${row.rowNumber}`;
+        const gRef = `G${row.rowNumber}`;
+        if (fixedCells[cRef] !== undefined) row.requirement = fixedCells[cRef];
+        if (fixedCells[fRef] !== undefined) row.copyText = fixedCells[fRef];
+        if (fixedCells[gRef] !== undefined) row.style = fixedCells[gRef];
+      };
+      applyFix(workbook.mainImageRow);
+      for (const row of workbook.rows) {
+        applyFix(row);
+      }
+    }
+
     return NextResponse.json(toPublicWorkbook(workbook));
   } catch (error) {
     console.error("[workbook/parse]", error);

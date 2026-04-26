@@ -30,6 +30,42 @@ function getText(value: unknown): string {
   return "";
 }
 
+function getRichText(item: unknown): string {
+  if (!item) return "";
+  if (typeof item === "string") return item;
+  const si = item as Record<string, unknown>;
+  if (si.t != null) {
+    const t = si.t;
+    if (typeof t === "string") return t;
+    if (typeof t === "object") {
+      const tObj = t as Record<string, unknown>;
+      return tObj["#text"] != null ? String(tObj["#text"]) : "";
+    }
+    return String(t);
+  }
+  const runs = asArray(si.r);
+  return runs.map((run) => {
+    const runObj = run as Record<string, unknown>;
+    const t = runObj.t;
+    if (t == null) return "";
+    if (typeof t === "string") return t;
+    if (typeof t === "object") {
+      const tObj = t as Record<string, unknown>;
+      return tObj["#text"] != null ? String(tObj["#text"]) : "";
+    }
+    return String(t);
+  }).join("");
+}
+
+export function looksGarbled(text: string): boolean {
+  if (text.length < 10) return false;
+  const hasHexColor = /[0-9A-F]{6,}/.test(text);
+  const hasCJK = /[\u4e00-\u9fff]/.test(text);
+  const hasHtmlEntity = /&#/.test(text);
+  const hasFontPattern = /微软雅黑|宋体|黑体/i.test(text);
+  return ((hasHexColor || hasHtmlEntity) && hasCJK) || hasFontPattern;
+}
+
 function normalizeCellRef(ref: string) {
   const match = /^([A-Z]+)(\d+)$/i.exec(ref);
   if (!match) return null;
@@ -90,7 +126,7 @@ async function parseSharedStrings(zip: JSZip) {
   if (!file) return [];
   const xml = await file.async("string");
   const doc = parser.parse(xml);
-  return asArray(doc?.sst?.si).map((item) => getText(item?.t ?? item?.r));
+  return asArray(doc?.sst?.si).map((item) => getRichText(item));
 }
 
 async function parseSheet(zip: JSZip, sheetPath: string, sharedStrings: string[]) {

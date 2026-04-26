@@ -30,6 +30,7 @@ type UploadProgress = {
 type RegenerateModalState = {
   job: GenerationJob;
   resultUrl: string;
+  fontReferenceUrl?: string;
 };
 
 function allRows(workbook: ParsedWorkbook | null, includeMain: boolean) {
@@ -99,6 +100,8 @@ function RowField({
   onToggle?: () => void;
 }) {
   const content = value || "Not provided";
+  const wrapperClass = "rounded-md border border-white/10 bg-black/20 p-3";
+  const labelClass = "mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-zinc-500";
 
   if (expandable) {
     return (
@@ -106,13 +109,11 @@ function RowField({
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="rounded-md border border-white/10 bg-black/20 p-3 text-left transition hover:border-white/20 hover:bg-white/[0.04]"
+        className={`${wrapperClass} w-full text-left transition hover:border-white/20 hover:bg-white/[0.04]`}
       >
-        <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px] font-semibold uppercase text-zinc-500">
-          <span className="flex items-center gap-1.5">
-            <Icon size={13} aria-hidden="true" />
-            {label}
-          </span>
+        <div className={labelClass}>
+          <Icon size={13} aria-hidden="true" />
+          <span className="flex-1">{label}</span>
           <ChevronDown
             size={14}
             aria-hidden="true"
@@ -127,10 +128,10 @@ function RowField({
   }
 
   return (
-    <div className="rounded-md border border-white/10 bg-black/20 p-3">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-zinc-500">
+    <div className={wrapperClass}>
+      <div className={labelClass}>
         <Icon size={13} aria-hidden="true" />
-        {label}
+        <span className="flex-1">{label}</span>
       </div>
       <p className="line-clamp-3 whitespace-pre-line text-sm leading-6 text-zinc-200">{content}</p>
     </div>
@@ -157,7 +158,7 @@ function RowPreview({ row }: { row: ParsedWorkbookRow }) {
             icon={MessageSquareText}
             label="Requirement"
             value={row.requirement}
-            expandable
+            expandable={row.requirement.length > 200}
             expanded={Boolean(expandedFields.requirement)}
             onToggle={() => toggleField("requirement")}
           />
@@ -165,7 +166,7 @@ function RowPreview({ row }: { row: ParsedWorkbookRow }) {
             icon={Captions}
             label="Copy"
             value={row.copyText}
-            expandable
+            expandable={row.copyText.length > 200}
             expanded={Boolean(expandedFields.copy)}
             onToggle={() => toggleField("copy")}
           />
@@ -200,6 +201,7 @@ export default function Home() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isProductDescriptionExpanded, setIsProductDescriptionExpanded] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [isFontRefSelectorOpen, setIsFontRefSelectorOpen] = useState(false);
   const pollingRef = useRef<number | null>(null);
 
   const rows = useMemo(() => allRows(workbook, includeMainImageRow), [workbook, includeMainImageRow]);
@@ -351,9 +353,10 @@ export default function Home() {
 
   function openRegenerateModal(job: GenerationJob) {
     if (!job.resultUrl) return;
-    setRegenerateModal({ job, resultUrl: job.resultUrl });
+    setRegenerateModal({ job, resultUrl: job.resultUrl, fontReferenceUrl: undefined });
     setRefinement("");
     setRegenerateError("");
+    setIsFontRefSelectorOpen(false);
   }
 
   async function submitRegeneration(event: FormEvent<HTMLFormElement>) {
@@ -361,6 +364,10 @@ export default function Home() {
     if (!regenerateModal) return;
     setIsRegenerating(true);
     setRegenerateError("");
+    const fontRefText = regenerateModal.fontReferenceUrl
+      ? "\n\nFont reference: Use the same font style and text treatment as shown in the font reference image."
+      : "";
+    const finalRefinement = refinement + fontRefText;
     try {
       const response = await fetch("/api/generate/regenerate", {
         method: "POST",
@@ -368,7 +375,7 @@ export default function Home() {
         body: JSON.stringify({
           job: regenerateModal.job,
           resultUrl: regenerateModal.resultUrl,
-          refinement,
+          refinement: finalRefinement,
         }),
       });
       const payload = await response.json();
@@ -379,6 +386,7 @@ export default function Home() {
       setStatus("polling");
       setRegenerateModal(null);
       setRefinement("");
+      setIsFontRefSelectorOpen(false);
     } catch (regenerateFailure) {
       setRegenerateError(regenerateFailure instanceof Error ? regenerateFailure.message : "Failed to regenerate image.");
     } finally {
@@ -710,6 +718,67 @@ export default function Home() {
                 placeholder="Example: make the background brighter, enlarge the product, and keep only the English headline."
                 className="mt-2 min-h-44 resize-none rounded-md border border-white/10 bg-black/30 p-3 text-sm leading-6 text-zinc-100 outline-none ring-lime-300/40 placeholder:text-zinc-600 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
               />
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsFontRefSelectorOpen((open) => !open)}
+                  disabled={isRegenerating}
+                  className="flex items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:text-zinc-600"
+                >
+                  <Palette size={14} aria-hidden="true" />
+                  Font Reference {regenerateModal.fontReferenceUrl ? "(1 selected)" : ""}
+                </button>
+                {isFontRefSelectorOpen ? (
+                  <div className="mt-3 grid grid-cols-4 gap-2 rounded-md border border-white/10 bg-black/20 p-3">
+                    {jobs
+                      .filter((j) => j.resultUrl && j.rowId !== regenerateModal.job.rowId)
+                      .map((job) => (
+                        <button
+                          key={job.rowId}
+                          type="button"
+                          onClick={() => {
+                            setRegenerateModal((m) => m ? { ...m, fontReferenceUrl: job.resultUrl } : null);
+                            setIsFontRefSelectorOpen(false);
+                          }}
+                          className={`relative overflow-hidden rounded border transition hover:border-lime-300/50 ${
+                            regenerateModal.fontReferenceUrl === job.resultUrl ? "border-lime-300" : "border-white/10"
+                          }`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={job.resultUrl}
+                            alt={`Row ${job.rowNumber}`}
+                            className="aspect-square w-full object-cover"
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-center font-mono text-[10px] text-zinc-300">
+                            Row {job.rowNumber}
+                          </div>
+                        </button>
+                      ))}
+                    {jobs.filter((j) => j.resultUrl && j.rowId !== regenerateModal.job.rowId).length === 0 ? (
+                      <p className="col-span-4 text-center text-xs text-zinc-500">No other images available</p>
+                    ) : null}
+                  </div>
+                ) : null}
+                {regenerateModal.fontReferenceUrl ? (
+                  <div className="mt-3 flex items-center gap-2 rounded-md border border-lime-300/30 bg-lime-300/[0.07] p-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={regenerateModal.fontReferenceUrl}
+                      alt="Font reference"
+                      className="h-10 w-10 rounded border border-white/10 object-cover"
+                    />
+                    <span className="flex-1 text-xs text-lime-200">Font reference selected</span>
+                    <button
+                      type="button"
+                      onClick={() => setRegenerateModal((m) => m ? { ...m, fontReferenceUrl: undefined } : null)}
+                      className="text-xs text-zinc-400 hover:text-zinc-200"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : null}
+              </div>
               {regenerateError ? (
                 <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">
                   {regenerateError}
