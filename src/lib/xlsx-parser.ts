@@ -9,7 +9,15 @@ const parser = new XMLParser({
   textNodeName: "#text",
 });
 
-const columnNames = ["A", "B", "C", "D", "E", "F", "G", "H"] as const;
+type SheetColumns = {
+  sequence: string;
+  size: string;
+  requirement: string;
+  copyText: string;
+  style?: string;
+  imageColumns: string[];
+  maxColumnIndex: number;
+};
 
 function asArray<T>(value: T | T[] | undefined | null): T[] {
   if (!value) return [];
@@ -83,6 +91,20 @@ function normalizeCellRef(ref: string) {
   return { col: match[1].toUpperCase(), row: Number(match[2]) };
 }
 
+function columnToIndex(col: string) {
+  return col.split("").reduce((index, char) => index * 26 + char.charCodeAt(0) - 64, 0);
+}
+
+function indexToColumn(index: number) {
+  let col = "";
+  while (index > 0) {
+    const remainder = (index - 1) % 26;
+    col = String.fromCharCode(65 + remainder) + col;
+    index = Math.floor((index - 1) / 26);
+  }
+  return col;
+}
+
 function mimeForFile(fileName: string) {
   const lower = fileName.toLowerCase();
   if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
@@ -97,6 +119,62 @@ function targetToMediaPath(target: string) {
 
 function extractDispimgId(value: string) {
   return /DISPIMG\("([^"]+)"/i.exec(value)?.[1] ?? null;
+}
+
+function normalizeHeader(value: string) {
+  return cleanCellText(value).replace(/\s+/g, "").toLowerCase();
+}
+
+function findOptionalHeaderColumn(headers: Map<string, string>, names: string[]) {
+  for (const [col, value] of headers) {
+    if (names.includes(value)) return col;
+  }
+  return undefined;
+}
+
+function findRequiredHeaderColumn(headers: Map<string, string>, names: string[]) {
+  const col = findOptionalHeaderColumn(headers, names);
+  if (!col) throw new Error(`Sheet1 is missing required header: ${names[0]}`);
+  return col;
+}
+
+function getSheetColumns(cells: Map<string, string>): SheetColumns {
+  const headers = new Map<string, string>();
+  let maxColumnIndex = 1;
+
+  for (const [ref, value] of cells) {
+    const cellRef = normalizeCellRef(ref);
+    if (!cellRef) continue;
+    maxColumnIndex = Math.max(maxColumnIndex, columnToIndex(cellRef.col));
+    if (cellRef.row === 1) headers.set(cellRef.col, normalizeHeader(value));
+  }
+
+  const sequence = findRequiredHeaderColumn(headers, ["序号"]);
+  const size = findRequiredHeaderColumn(headers, ["尺寸"]);
+  const requirement = findRequiredHeaderColumn(headers, ["需求"]);
+  const copyText = findRequiredHeaderColumn(headers, ["文案"]);
+  const style = findOptionalHeaderColumn(headers, ["风格"]);
+  const requirementIndex = columnToIndex(requirement);
+  const copyTextIndex = columnToIndex(copyText);
+
+  if (requirementIndex >= copyTextIndex) {
+    throw new Error("Sheet1 header 文案 must appear after 需求.");
+  }
+
+  const imageColumns = Array.from(
+    { length: copyTextIndex - requirementIndex - 1 },
+    (_, index) => indexToColumn(requirementIndex + index + 1)
+  );
+
+  return {
+    sequence,
+    size,
+    requirement,
+    copyText,
+    style,
+    imageColumns,
+    maxColumnIndex: Math.max(maxColumnIndex, style ? columnToIndex(style) : copyTextIndex),
+  };
 }
 
 export function aspectRatioFromSize(size: string): KieAspectRatio {
@@ -202,36 +280,47 @@ async function parseCellImages(zip: JSZip): Promise<Map<string, WorkbookImage>> 
   return result;
 }
 
-function rowObject(cells: Map<string, string>, rowNumber: number) {
+function rowObject(cells: Map<string, string>, rowNumber: number, maxColumnIndex: number) {
   const values: Record<string, string> = {};
-  for (const col of columnNames) {
+  for (let index = 1; index <= maxColumnIndex; index += 1) {
+    const col = indexToColumn(index);
     values[col] = cells.get(`${col}${rowNumber}`)?.trim() ?? "";
   }
   return values;
 }
 
-function imagesForRow(values: Record<string, string>, imageMap: Map<string, WorkbookImage>) {
-  return ["D", "E"]
+function imageIdsForRow(values: Record<string, string>, imageColumns: string[]) {
+  return imageColumns
     .map((col) => extractDispimgId(values[col] ?? ""))
-    .filter((id): id is string => Boolean(id))
+    .filter((id): id is string => Boolean(id));
+}
+
+function imagesForRow(values: Record<string, string>, imageColumns: string[], imageMap: Map<string, WorkbookImage>) {
+  return imageIdsForRow(values, imageColumns)
     .map((id) => imageMap.get(id))
     .filter((image): image is WorkbookImage => Boolean(image));
 }
 
-function buildParsedRow(cells: Map<string, string>, imageMap: Map<string, WorkbookImage>, rowNumber: number): ParsedWorkbookRow {
-  const values = rowObject(cells, rowNumber);
-  const aspectRatio = aspectRatioFromSize(values.B);
+function buildParsedRow(
+  cells: Map<string, string>,
+  imageMap: Map<string, WorkbookImage>,
+  columns: SheetColumns,
+  rowNumber: number
+): ParsedWorkbookRow {
+  const values = rowObject(cells, rowNumber, columns.maxColumnIndex);
+  const size = values[columns.size];
+  const aspectRatio = aspectRatioFromSize(size);
   return {
     id: `row-${rowNumber}`,
     rowNumber,
-    sequence: values.A,
-    size: values.B,
-    requirement: values.C,
-    copyText: values.F,
-    style: values.G,
+    sequence: values[columns.sequence],
+    size,
+    requirement: values[columns.requirement],
+    copyText: values[columns.copyText],
+    style: columns.style ? values[columns.style] : "",
     aspectRatio,
-    resolution: resolutionFromSize(values.B, aspectRatio),
-    referenceImages: imagesForRow(values, imageMap),
+    resolution: resolutionFromSize(size, aspectRatio),
+    referenceImages: imagesForRow(values, columns.imageColumns, imageMap),
     source: { cells: values },
   };
 }
@@ -244,6 +333,7 @@ export async function parseWorkbook(buffer: ArrayBuffer | Buffer): Promise<Parse
     parseSheet(zip, "xl/worksheets/sheet2.xml", sharedStrings),
     parseCellImages(zip),
   ]);
+  const columns = getSheetColumns(sheet1);
 
   const rowNumbers = [...sheet1.keys()]
     .map((ref) => normalizeCellRef(ref))
@@ -252,17 +342,17 @@ export async function parseWorkbook(buffer: ArrayBuffer | Buffer): Promise<Parse
     .filter((row) => row >= 2);
   const maxRow = Math.max(...rowNumbers, 1);
   const allRows = Array.from({ length: Math.max(0, maxRow - 1) }, (_, index) =>
-    buildParsedRow(sheet1, imageMap, index + 2)
+    buildParsedRow(sheet1, imageMap, columns, index + 2)
   ).filter((row) => row.requirement || row.copyText || row.referenceImages.length > 0);
 
   const mainImageRow = allRows.find((row) => row.rowNumber === 2);
   const rows = allRows.filter((row) => row.rowNumber >= 3);
   const warnings: string[] = [];
   if (!mainImageRow?.referenceImages.length) {
-    warnings.push("No product reference images found in Sheet1 row 2 columns D:E.");
+    warnings.push(`No product reference images found in Sheet1 row 2 columns ${columns.imageColumns.join(":")}.`);
   }
   for (const row of allRows) {
-    for (const col of ["D", "E"]) {
+    for (const col of columns.imageColumns) {
       const value = row.source.cells[col];
       const id = extractDispimgId(value);
       if (id && !imageMap.has(id)) warnings.push(`Row ${row.rowNumber} column ${col} image ${id} was not found.`);

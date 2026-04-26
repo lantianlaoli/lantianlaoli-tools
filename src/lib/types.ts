@@ -57,3 +57,10 @@ export type GenerationJob = {
   resolution: KieResolution;
   sourceRow: ParsedWorkbookRow["source"];
 };
+
+export type TextBlock = {
+  id: string;
+  text: string;
+  position: string;
+  size: "small" | "medium" | "large";
+};

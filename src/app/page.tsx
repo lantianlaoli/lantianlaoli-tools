@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Download,
   FileText,
+  FileUp,
   Gauge,
   Hash,
   ImageIcon,
@@ -13,14 +14,18 @@ import {
   MessageSquareText,
   Palette,
   PackageSearch,
+  Pencil,
   RefreshCw,
   Ruler,
   ChevronDown,
+  Rows3,
+  Type,
+  X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import type { FormEvent } from "react";
-import type { GenerationJob, ParsedWorkbook, ParsedWorkbookRow } from "@/lib/types";
+import type { GenerationJob, ParsedWorkbook, ParsedWorkbookRow, TextBlock } from "@/lib/types";
 
 type Status = "idle" | "parsing" | "ready" | "starting" | "polling" | "done" | "error";
 type UploadProgress = {
@@ -29,13 +34,44 @@ type UploadProgress = {
 };
 type RegenerateModalState = {
   job: GenerationJob;
-  resultUrl: string;
+  resultUrl?: string;
   fontReferenceUrl?: string;
+  textBlocks?: TextBlock[];
+};
+type PersistedPageState = {
+  workbook: ParsedWorkbook | null;
+  includeMainImageRow: boolean;
+  jobs: GenerationJob[];
+  status: Status;
+  isProductDescriptionExpanded: boolean;
+};
+
+const PAGE_STATE_STORAGE_KEY = "rivora.pageState.v1";
+const RESTORABLE_STATUSES = new Set<Status>(["idle", "ready", "polling", "done", "error"]);
+const FONT_REFERENCE_PREFIX =
+  "Font reference: Use the same font style and text treatment as shown in the font reference image.\n\n";
+const DEFAULT_PAGE_STATE: PersistedPageState = {
+  workbook: null,
+  includeMainImageRow: false,
+  jobs: [],
+  status: "idle",
+  isProductDescriptionExpanded: false,
 };
 
 function allRows(workbook: ParsedWorkbook | null, includeMain: boolean) {
   if (!workbook) return [];
   return [...(includeMain && workbook.mainImageRow ? [workbook.mainImageRow] : []), ...workbook.rows];
+}
+
+function statusAfterRestore(status: Status, workbook: ParsedWorkbook | null, jobs: GenerationJob[]) {
+  if (status === "polling" && jobs.some((job) => job.status === "processing" || job.status === "waiting")) {
+    return "polling";
+  }
+  if (status === "done" || jobs.some((job) => job.status === "success" || job.status === "fail")) {
+    return jobs.every((job) => job.status === "success" || job.status === "fail") ? "done" : "polling";
+  }
+  if (workbook && RESTORABLE_STATUSES.has(status)) return status === "idle" ? "ready" : status;
+  return workbook ? "ready" : "idle";
 }
 
 function StatusBadge({ status }: { status: GenerationJob["status"] }) {
@@ -100,7 +136,7 @@ function RowField({
   onToggle?: () => void;
 }) {
   const content = value || "Not provided";
-  const wrapperClass = "rounded-md border border-white/10 bg-black/20 p-3";
+  const wrapperClass = "flex h-full flex-col items-stretch justify-start rounded-md border border-white/10 bg-black/20 p-3";
   const labelClass = "mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase text-zinc-500";
 
   if (expandable) {
@@ -138,6 +174,36 @@ function RowField({
   );
 }
 
+function ParsingPanel({ progress }: { progress: UploadProgress | null }) {
+  const currentProgress = progress ?? { label: "Preparing your workbook", percent: 8 };
+
+  return (
+    <section className="flex min-h-[420px] items-center justify-center rounded-lg border border-lime-300/30 bg-lime-300/[0.05] px-6">
+      <div className="flex w-full max-w-xl flex-col items-center text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full border border-lime-300/30 bg-black/30 text-lime-100">
+          <RefreshCw size={24} aria-hidden="true" className="animate-spin" />
+        </div>
+        <h2 className="mt-5 text-base font-semibold text-lime-100">{currentProgress.label}</h2>
+        <p className="mt-2 max-w-md text-sm leading-6 text-zinc-400">
+          Extracting product details, row instructions, and reference images.
+        </p>
+        <div className="mt-6 w-full">
+          <div className="mb-2 flex items-center justify-between text-xs text-lime-100">
+            <span>Working on your file</span>
+            <span className="font-mono">{currentProgress.percent}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-black/40">
+            <div
+              className="h-full rounded-full bg-lime-300 transition-[width] duration-300 ease-out"
+              style={{ width: `${currentProgress.percent}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function RowPreview({ row }: { row: ParsedWorkbookRow }) {
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
   const toggleField = (field: string) => {
@@ -158,7 +224,7 @@ function RowPreview({ row }: { row: ParsedWorkbookRow }) {
             icon={MessageSquareText}
             label="Requirement"
             value={row.requirement}
-            expandable={row.requirement.length > 200}
+            expandable={Boolean(row.requirement)}
             expanded={Boolean(expandedFields[`${row.id}-requirement`])}
             onToggle={() => toggleField("requirement")}
           />
@@ -166,11 +232,18 @@ function RowPreview({ row }: { row: ParsedWorkbookRow }) {
             icon={Captions}
             label="Copy"
             value={row.copyText}
-            expandable={row.copyText.length > 200}
+            expandable={Boolean(row.copyText)}
             expanded={Boolean(expandedFields[`${row.id}-copy`])}
             onToggle={() => toggleField("copy")}
           />
-          <RowField icon={Palette} label="Style" value={row.style} />
+          <RowField
+            icon={Palette}
+            label="Style"
+            value={row.style}
+            expandable={row.style.length > 200}
+            expanded={Boolean(expandedFields[`${row.id}-style`])}
+            onToggle={() => toggleField("style")}
+          />
         </div>
       </div>
       <div className="flex items-start gap-2 overflow-visible xl:justify-end">
@@ -190,18 +263,26 @@ function RowPreview({ row }: { row: ParsedWorkbookRow }) {
 }
 
 export default function Home() {
-  const [status, setStatus] = useState<Status>("idle");
-  const [workbook, setWorkbook] = useState<ParsedWorkbook | null>(null);
-  const [includeMainImageRow, setIncludeMainImageRow] = useState(false);
-  const [jobs, setJobs] = useState<GenerationJob[]>([]);
+  const [status, setStatus] = useState<Status>(DEFAULT_PAGE_STATE.status);
+  const [workbook, setWorkbook] = useState<ParsedWorkbook | null>(DEFAULT_PAGE_STATE.workbook);
+  const [includeMainImageRow, setIncludeMainImageRow] = useState(DEFAULT_PAGE_STATE.includeMainImageRow);
+  const [jobs, setJobs] = useState<GenerationJob[]>(DEFAULT_PAGE_STATE.jobs);
   const [error, setError] = useState("");
   const [regenerateModal, setRegenerateModal] = useState<RegenerateModalState | null>(null);
   const [refinement, setRefinement] = useState("");
   const [regenerateError, setRegenerateError] = useState("");
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const [isProductDescriptionExpanded, setIsProductDescriptionExpanded] = useState(false);
+  const [isProductDescriptionExpanded, setIsProductDescriptionExpanded] = useState(
+    DEFAULT_PAGE_STATE.isProductDescriptionExpanded
+  );
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [isFontRefSelectorOpen, setIsFontRefSelectorOpen] = useState(false);
+  const [isAnalyzingText, setIsAnalyzingText] = useState(false);
+  const [textAnalysisError, setTextAnalysisError] = useState("");
+  const [editedTexts, setEditedTexts] = useState<Record<string, string>>({});
+  const [isEditTextMode, setIsEditTextMode] = useState(false);
+  const [hasRestoredPageState, setHasRestoredPageState] = useState(false);
   const pollingRef = useRef<number | null>(null);
   const generationSectionRef = useRef<HTMLDivElement>(null);
 
@@ -209,14 +290,14 @@ export default function Home() {
   const canGenerate = status === "ready" || status === "done" || status === "error";
   const completedCount = jobs.filter((job) => job.status === "success" || job.status === "fail").length;
 
-  async function parseFile(file: File) {
+  const parseFile = useCallback(async (file: File) => {
     setStatus("parsing");
     setError("");
     setJobs([]);
     setWorkbook(null);
     setIncludeMainImageRow(false);
     setIsProductDescriptionExpanded(false);
-    setUploadProgress({ label: "Uploading workbook", percent: 8 });
+    setUploadProgress({ label: "Preparing your workbook", percent: 8 });
 
     const payload = await new Promise<ParsedWorkbook>((resolve, reject) => {
       const formData = new FormData();
@@ -232,7 +313,7 @@ export default function Home() {
         setUploadProgress({ label: "Uploading workbook", percent: Math.min(70, Math.max(12, uploadPercent)) });
       };
       request.upload.onload = () => {
-        setUploadProgress({ label: "Parsing workbook images", percent: 76 });
+        setUploadProgress({ label: "Reading workbook contents", percent: 76 });
       };
 
       request.onload = () => {
@@ -242,6 +323,7 @@ export default function Home() {
             reject(new Error(responsePayload.error || "Failed to parse workbook."));
             return;
           }
+          setUploadProgress({ label: "Organizing rows and images", percent: 92 });
           resolve(responsePayload as ParsedWorkbook);
         } catch {
           reject(new Error("Failed to read parser response."));
@@ -249,20 +331,44 @@ export default function Home() {
       };
       request.onerror = () => reject(new Error("Workbook upload failed."));
       request.onabort = () => reject(new Error("Workbook upload was cancelled."));
-      request.onloadend = () => {
-        if (request.status >= 200 && request.status < 300) {
-          setUploadProgress({ label: "Parsing embedded images", percent: 92 });
-        }
-      };
       request.open("POST", "/api/workbook/parse");
       request.send(formData);
     });
 
     setWorkbook(payload);
     setStatus("ready");
-    setUploadProgress({ label: "Workbook parsed", percent: 100 });
+    setUploadProgress({ label: "Workbook ready", percent: 100 });
     window.setTimeout(() => setUploadProgress(null), 900);
-  }
+  }, []);
+
+  const handleFile = useCallback((file: File) => {
+    if (!file.name.endsWith(".xlsx")) {
+      setError("Please upload a .xlsx file.");
+      return;
+    }
+    parseFile(file).catch((parseError) => {
+      setError(parseError instanceof Error ? parseError.message : "Failed to parse workbook.");
+      setUploadProgress(null);
+      setStatus("error");
+    });
+  }, [parseFile]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  }, [handleFile]);
 
   async function startGeneration() {
     if (!workbook) return;
@@ -319,6 +425,16 @@ export default function Home() {
       })
     );
     setJobs(nextJobs);
+    setRegenerateModal((modal) => {
+      if (!modal) return null;
+      const updatedJob = nextJobs.find((job) => job.rowId === modal.job.rowId);
+      if (!updatedJob) return modal;
+      return {
+        ...modal,
+        job: updatedJob,
+        resultUrl: updatedJob.resultUrl,
+      };
+    });
     if (nextJobs.every((job) => job.status === "success" || job.status === "fail")) {
       setStatus("done");
     }
@@ -361,6 +477,44 @@ export default function Home() {
     setRefinement("");
     setRegenerateError("");
     setIsFontRefSelectorOpen(false);
+    setEditedTexts({});
+    setIsEditTextMode(false);
+    setTextAnalysisError("");
+  }
+
+  async function analyzeImageText(resultUrl: string) {
+    setIsAnalyzingText(true);
+    setTextAnalysisError("");
+    try {
+      const response = await fetch("/api/analyze/image-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: resultUrl }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to analyze image.");
+      const textBlocks = payload.textBlocks as TextBlock[];
+      setRegenerateModal((m) =>
+        m ? { ...m, textBlocks } : null
+      );
+      setEditedTexts(Object.fromEntries(textBlocks.map((block) => [block.id, block.text])));
+      setIsEditTextMode(true);
+    } catch (err) {
+      setTextAnalysisError(err instanceof Error ? err.message : "Failed to analyze image text.");
+    } finally {
+      setIsAnalyzingText(false);
+    }
+  }
+
+  function analyzeCurrentModalText() {
+    if (regenerateModal?.textBlocks?.length) {
+      setIsEditTextMode(true);
+      return;
+    }
+    if (!regenerateModal?.resultUrl) return;
+    analyzeImageText(regenerateModal.resultUrl).catch(() => {
+      // analyzeImageText owns user-visible error state.
+    });
   }
 
   async function submitRegeneration(event: FormEvent<HTMLFormElement>) {
@@ -368,10 +522,28 @@ export default function Home() {
     if (!regenerateModal) return;
     setIsRegenerating(true);
     setRegenerateError("");
+
+    let finalRefinement = refinement;
+    if (isEditTextMode) {
+      const changedEntries = (regenerateModal.textBlocks ?? [])
+        .map((block) => ({
+          original: block.text,
+          next: editedTexts[block.id] ?? block.text,
+        }))
+        .filter(({ original, next }) => original.trim() !== next.trim());
+      if (changedEntries.length > 0) {
+        const changes = changedEntries
+          .map(({ original, next }) => `Text "${original}" → "${next.trim() || "[remove text]"}"`)
+          .join("\n");
+        finalRefinement = `Edit the following text in the image:\n${changes}`;
+      }
+    }
+
+    // Append font reference if set
     const fontRefText = regenerateModal.fontReferenceUrl
       ? "\n\nFont reference: Use the same font style and text treatment as shown in the font reference image."
       : "";
-    const finalRefinement = refinement + fontRefText;
+
     try {
       const response = await fetch("/api/generate/regenerate", {
         method: "POST",
@@ -379,24 +551,71 @@ export default function Home() {
         body: JSON.stringify({
           job: regenerateModal.job,
           resultUrl: regenerateModal.resultUrl,
-          refinement: finalRefinement,
+          refinement: finalRefinement + fontRefText,
         }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Failed to regenerate image.");
+      const nextJob = payload.job as GenerationJob;
       setJobs((currentJobs) =>
-        currentJobs.map((job) => (job.rowId === regenerateModal.job.rowId ? payload.job : job))
+        currentJobs.map((job) => (job.rowId === regenerateModal.job.rowId ? nextJob : job))
       );
       setStatus("polling");
-      setRegenerateModal(null);
+      setRegenerateModal((modal) =>
+        modal && modal.job.rowId === regenerateModal.job.rowId
+          ? {
+              ...modal,
+              job: nextJob,
+              resultUrl: nextJob.resultUrl,
+              fontReferenceUrl: undefined,
+            }
+          : modal
+      );
       setRefinement("");
       setIsFontRefSelectorOpen(false);
+      setTextAnalysisError("");
     } catch (regenerateFailure) {
       setRegenerateError(regenerateFailure instanceof Error ? regenerateFailure.message : "Failed to regenerate image.");
     } finally {
       setIsRegenerating(false);
     }
   }
+
+  /* eslint-disable react-hooks/set-state-in-effect -- Restore browser-only session state after hydration. */
+  useEffect(() => {
+    try {
+      const storedState = window.localStorage.getItem(PAGE_STATE_STORAGE_KEY);
+      if (!storedState) return;
+
+      const parsedState = JSON.parse(storedState) as Partial<PersistedPageState>;
+      const restoredWorkbook = parsedState.workbook ?? null;
+      const restoredJobs = Array.isArray(parsedState.jobs) ? parsedState.jobs : [];
+
+      setWorkbook(restoredWorkbook);
+      setIncludeMainImageRow(Boolean(parsedState.includeMainImageRow));
+      setJobs(restoredJobs);
+      setStatus(statusAfterRestore(parsedState.status ?? "idle", restoredWorkbook, restoredJobs));
+      setIsProductDescriptionExpanded(Boolean(parsedState.isProductDescriptionExpanded));
+    } catch {
+      window.localStorage.removeItem(PAGE_STATE_STORAGE_KEY);
+    } finally {
+      setHasRestoredPageState(true);
+    }
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    if (!hasRestoredPageState) return;
+
+    const stateToPersist: PersistedPageState = {
+      workbook,
+      includeMainImageRow,
+      jobs,
+      status,
+      isProductDescriptionExpanded,
+    };
+    window.localStorage.setItem(PAGE_STATE_STORAGE_KEY, JSON.stringify(stateToPersist));
+  }, [hasRestoredPageState, includeMainImageRow, isProductDescriptionExpanded, jobs, status, workbook]);
 
   useEffect(() => {
     if (status !== "polling") return;
@@ -406,67 +625,81 @@ export default function Home() {
     };
   }, [jobs, status]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- font reference prefix must sync with modal state */
+  // Auto-prepend/remove font reference text in prompt when reference is selected or cleared
+  useEffect(() => {
+    if (!regenerateModal) return;
+    if (regenerateModal.fontReferenceUrl) {
+      if (!refinement.startsWith(FONT_REFERENCE_PREFIX)) {
+        setRefinement((prev) => FONT_REFERENCE_PREFIX + prev);
+      }
+    } else {
+      if (refinement.startsWith(FONT_REFERENCE_PREFIX)) {
+        setRefinement((prev) => prev.slice(FONT_REFERENCE_PREFIX.length));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regenerateModal?.fontReferenceUrl]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const regenerateModalStatus = regenerateModal?.job.status;
+  const isRegenerateModalGenerating = Boolean(
+    regenerateModal &&
+      (isRegenerating ||
+        (!regenerateModal.resultUrl &&
+          (regenerateModalStatus === "waiting" || regenerateModalStatus === "processing")))
+  );
+  const isRegenerateModalFailed = regenerateModalStatus === "fail";
+
   return (
     <main className="min-h-screen bg-[#10100f] text-zinc-100">
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 md:px-6">
         <header className="flex flex-col gap-4 border-b border-white/10 pb-5 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-500">XLSX to GPT Image 2</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Batch product image generator</h1>
+            <p className="font-mono text-2xl font-semibold tracking-tight text-zinc-100">Rivora</p>
           </div>
-          <label className="inline-flex cursor-pointer items-center justify-center rounded-md bg-white px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-zinc-200">
-            Upload XLSX
-            <input
-              type="file"
-              accept=".xlsx"
-              className="sr-only"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                parseFile(file).catch((parseError) => {
-                  setError(parseError instanceof Error ? parseError.message : "Failed to parse workbook.");
-                  setUploadProgress(null);
-                  setStatus("error");
-                });
-              }}
-            />
-          </label>
+          {workbook ? (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                <Gauge size={14} aria-hidden="true" />
+                <span className="font-mono">{status}</span>
+              </div>
+              <div className="h-4 w-px bg-white/10" />
+              <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                <Rows3 size={14} aria-hidden="true" />
+                <span className="font-mono">{rows.length}</span>
+              </div>
+              <div className="h-4 w-px bg-white/10" />
+              <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                <BadgeCheck size={14} aria-hidden="true" />
+                <span className="font-mono">{jobs.length ? `${completedCount}/${jobs.length}` : "0/0"}</span>
+              </div>
+              <label
+                className={`inline-flex h-9 items-center gap-2 rounded-md border border-white/15 px-3 text-xs font-semibold text-zinc-100 transition ${
+                  status === "parsing"
+                    ? "cursor-not-allowed opacity-50"
+                    : "cursor-pointer hover:border-white/25 hover:bg-white/10"
+                }`}
+              >
+                <RefreshCw size={14} aria-hidden="true" />
+                Re-parse XLSX
+                <input
+                  type="file"
+                  accept=".xlsx"
+                  disabled={status === "parsing"}
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) handleFile(file);
+                  }}
+                />
+              </label>
+            </div>
+          ) : null}
         </header>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
-            <div className="text-xs uppercase text-zinc-500">State</div>
-            <div className="mt-2 font-mono text-lg">{status}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
-            <div className="text-xs uppercase text-zinc-500">Rows</div>
-            <div className="mt-2 font-mono text-lg">{rows.length}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
-            <div className="text-xs uppercase text-zinc-500">Jobs complete</div>
-            <div className="mt-2 font-mono text-lg">{jobs.length ? `${completedCount}/${jobs.length}` : "0/0"}</div>
-          </div>
-        </section>
-
         {error ? <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">{error}</div> : null}
-
-        {uploadProgress ? (
-          <section className="rounded-lg border border-lime-300/30 bg-lime-300/[0.07] p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-lime-100">
-                <FileText size={16} aria-hidden="true" />
-                {uploadProgress.label}
-              </div>
-              <div className="font-mono text-xs text-lime-100">{uploadProgress.percent}%</div>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/40">
-              <div
-                className="h-full rounded-full bg-lime-300 transition-[width] duration-300 ease-out"
-                style={{ width: `${uploadProgress.percent}%` }}
-              />
-            </div>
-          </section>
-        ) : null}
 
         {workbook ? (
           <section className="grid gap-6 lg:grid-cols-[380px_1fr]">
@@ -570,21 +803,41 @@ export default function Home() {
             </aside>
 
             <div className="overflow-visible rounded-lg border border-white/10 bg-white/[0.03]">
-              <div className="border-b border-white/10 px-5 py-3">
+              <div className="flex items-center gap-2 border-b border-white/10 px-5 py-3">
+                <FileText size={16} aria-hidden="true" className="text-zinc-400" />
                 <h2 className="text-sm font-semibold">Parsed workbook rows</h2>
-                <p className="mt-1 text-xs text-zinc-500">Review requirement, copy, style, references, and output settings from the uploaded sheet.</p>
               </div>
               {rows.map((row) => <RowPreview key={row.id} row={row} />)}
             </div>
           </section>
+        ) : status === "parsing" ? (
+          <ParsingPanel progress={uploadProgress} />
         ) : (
-          <section className="flex min-h-[420px] items-center justify-center rounded-lg border border-dashed border-white/15 bg-white/[0.03]">
-            <div className="max-w-md text-center">
-              <h2 className="text-xl font-semibold">Upload the workbook to start</h2>
-              <p className="mt-3 text-sm leading-6 text-zinc-400">
-                The parser reads WPS embedded images, product context, row requirements, reference images, title text, and size targets.
-              </p>
+          <section
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`relative flex min-h-[420px] cursor-pointer items-center justify-center rounded-lg border-2 border-dashed bg-white/[0.02] transition-colors ${
+              isDragging ? "border-lime-300/60 bg-lime-300/[0.05]" : "border-white/15 hover:border-white/25"
+            }`}
+          >
+            <div className="flex flex-col items-center gap-4 text-center">
+              <FileUp size={40} aria-hidden="true" className="text-zinc-500" />
+              <div>
+                <p className="text-sm font-medium text-zinc-300">Drop your XLSX here, or click to upload</p>
+                <p className="mt-1 text-xs text-zinc-500">WPS embedded images, product context, rows, references</p>
+              </div>
             </div>
+            <input
+              type="file"
+              accept=".xlsx"
+              className="absolute inset-0 cursor-pointer opacity-0"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) handleFile(file);
+              }}
+            />
           </section>
         )}
 
@@ -681,130 +934,300 @@ export default function Home() {
       </div>
       {regenerateModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
-          <div className="grid max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-lg border border-white/10 bg-[#151514] shadow-2xl md:grid-cols-[360px_1fr]">
-            <div className="border-b border-white/10 bg-black/20 p-4 md:border-b-0 md:border-r">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={regenerateModal.resultUrl}
-                alt=""
-                className="aspect-square w-full rounded-md border border-white/10 object-cover"
-              />
-              <div className="mt-3 font-mono text-xs text-zinc-500">Row {regenerateModal.job.rowNumber}</div>
-              <div className="mt-1 text-xs text-zinc-400">
-                {regenerateModal.job.aspectRatio} · {regenerateModal.job.resolution}
-              </div>
+          <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-white/10 bg-[#151514] shadow-2xl">
+
+            {/* Header: Edit image title + close icon */}
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+              <h2 className="text-base font-semibold text-zinc-100">Edit image</h2>
+              <button
+                type="button"
+                onClick={() => setRegenerateModal(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-100"
+                aria-label="Close"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
             </div>
-            <form onSubmit={submitRegeneration} className="flex min-h-[420px] flex-col p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold">Regenerate image</h2>
-                  <p className="mt-2 text-sm leading-6 text-zinc-400">
-                    Describe the adjustment you want. The current image will be used as the visual base.
-                  </p>
+
+            {/* Image section */}
+            <div className="relative border-b border-white/10 bg-black">
+              {isAnalyzingText && regenerateModal.resultUrl ? (
+                <div className="relative aspect-[4/3] w-full overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={regenerateModal.resultUrl}
+                    alt=""
+                    className="h-full w-full object-contain opacity-45 blur-sm"
+                  />
+                  <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
+                  <div className="result-wave absolute inset-0 z-10" />
+                  <div className="absolute inset-0 z-20 flex items-center justify-center px-6">
+                    <div className="flex min-w-72 flex-col items-center gap-3 rounded-xl border border-white/25 bg-[#151514]/85 px-7 py-6 text-center shadow-2xl shadow-black/80 backdrop-blur-xl">
+                      <div className="flex h-12 w-28 items-center justify-center rounded-full border border-lime-300/40 bg-lime-300/15 text-lime-100">
+                        <Type size={22} aria-hidden="true" />
+                      </div>
+                      <div>
+                        <div className="text-base font-semibold text-white">Analyzing text...</div>
+                        <div className="mt-1 text-xs text-zinc-300">Finding editable lines in this image.</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setRegenerateModal(null)}
-                  className="rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10"
-                >
-                  Close
+              ) : isRegenerateModalGenerating ? (
+                <div className="result-wave flex aspect-[4/3] w-full items-center justify-center bg-white/[0.04] text-xs text-zinc-400">
+                  <div className="relative z-10 flex flex-col items-center gap-3">
+                    <div className="flex h-12 w-28 items-center justify-center rounded-full border border-white/10 bg-black/30">
+                      <ImageIcon size={20} aria-hidden="true" />
+                    </div>
+                    <span>Generating image...</span>
+                  </div>
+                </div>
+              ) : isRegenerateModalFailed ? (
+                <div className="flex aspect-[4/3] w-full items-center justify-center bg-black px-6 text-center">
+                  <div className="max-w-md rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm leading-6 text-red-100">
+                    {regenerateModal.job.error || "Image generation failed."}
+                  </div>
+                </div>
+              ) : regenerateModal.resultUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={regenerateModal.resultUrl}
+                  alt=""
+                  className="aspect-[4/3] w-full object-contain"
+                />
+              ) : null}
+            </div>
+
+            {/* Font reference selector — shown above prompt when open */}
+            {isFontRefSelectorOpen && !isRegenerateModalGenerating ? (
+              <div className="border-b border-white/10 bg-[#1c1c1a] p-4">
+                <div className="mb-3 text-xs font-medium text-zinc-400">Select a photo to reference its font style</div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {jobs
+                    .filter((j) => j.resultUrl && j.rowId !== regenerateModal.job.rowId)
+                    .map((job) => (
+                      <button
+                        key={job.rowId}
+                        type="button"
+                        onClick={() => {
+                          setRegenerateModal((m) => m ? { ...m, fontReferenceUrl: job.resultUrl } : null);
+                          setIsFontRefSelectorOpen(false);
+                        }}
+                        className={`relative shrink-0 overflow-hidden rounded-md border-2 transition ${
+                          regenerateModal.fontReferenceUrl === job.resultUrl
+                            ? "border-lime-300"
+                            : "border-transparent hover:border-white/30"
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={job.resultUrl}
+                          alt={`Row ${job.rowNumber}`}
+                          className="h-14 w-14 object-cover"
+                        />
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/70 px-1 py-0.5 text-center font-mono text-[9px] text-zinc-300">
+                          R{job.rowNumber}
+                        </div>
+                      </button>
+                    ))}
+                  {jobs.filter((j) => j.resultUrl && j.rowId !== regenerateModal.job.rowId).length === 0 ? (
+                    <p className="text-xs text-zinc-500">No other images available</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Font reference applied indicator */}
+            {regenerateModal.fontReferenceUrl ? (
+              <div className="flex items-center gap-3 border-b border-white/10 bg-[#1c1c1a] px-5 py-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={regenerateModal.fontReferenceUrl}
+                  alt="Font reference"
+                  className="h-10 w-10 shrink-0 rounded-md border border-white/10 object-cover"
+                />
+                <span className="flex-1 text-sm text-lime-200">Font reference applied</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRegenerateModal((m) => m ? { ...m, fontReferenceUrl: undefined } : null);
+                    }}
+                    disabled={isRegenerateModalGenerating}
+                    className="text-xs text-zinc-400 transition-colors hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                  Remove
                 </button>
               </div>
-              <label className="mt-6 text-sm font-medium text-zinc-200" htmlFor="regenerate-refinement">
-                Refinement request
-              </label>
-              <textarea
-                id="regenerate-refinement"
-                value={refinement}
-                onChange={(event) => setRefinement(event.target.value)}
-                rows={8}
-                disabled={isRegenerating}
-                placeholder="Example: make the background brighter, enlarge the product, and keep only the English headline."
-                className="mt-2 min-h-44 resize-none rounded-md border border-white/10 bg-black/30 p-3 text-sm leading-6 text-zinc-100 outline-none ring-lime-300/40 placeholder:text-zinc-600 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
-              />
-              <div className="mt-4">
+            ) : null}
+
+            {/* Text analysis error */}
+            {textAnalysisError ? (
+              <div className="flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-5 py-3">
+                <span className="text-sm text-amber-100">{textAnalysisError}</span>
                 <button
                   type="button"
-                  onClick={() => setIsFontRefSelectorOpen((open) => !open)}
-                  disabled={isRegenerating}
-                  className="flex items-center gap-2 rounded-md border border-white/15 px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:text-zinc-600"
+                  onClick={() => setTextAnalysisError("")}
+                  className="text-xs text-amber-300 underline transition-colors hover:text-amber-100"
                 >
-                  <Palette size={14} aria-hidden="true" />
-                  Font Reference {regenerateModal.fontReferenceUrl ? "(1 selected)" : ""}
+                  Dismiss
                 </button>
-                {isFontRefSelectorOpen ? (
-                  <div className="mt-3 grid grid-cols-4 gap-2 rounded-md border border-white/10 bg-black/20 p-3">
-                    {jobs
-                      .filter((j) => j.resultUrl && j.rowId !== regenerateModal.job.rowId)
-                      .map((job) => (
-                        <button
-                          key={job.rowId}
-                          type="button"
-                          onClick={() => {
-                            setRegenerateModal((m) => m ? { ...m, fontReferenceUrl: job.resultUrl } : null);
-                            setIsFontRefSelectorOpen(false);
-                          }}
-                          className={`relative overflow-hidden rounded border transition hover:border-lime-300/50 ${
-                            regenerateModal.fontReferenceUrl === job.resultUrl ? "border-lime-300" : "border-white/10"
-                          }`}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={job.resultUrl}
-                            alt={`Row ${job.rowNumber}`}
-                            className="aspect-square w-full object-cover"
-                          />
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-center font-mono text-[10px] text-zinc-300">
-                            Row {job.rowNumber}
-                          </div>
-                        </button>
-                      ))}
-                    {jobs.filter((j) => j.resultUrl && j.rowId !== regenerateModal.job.rowId).length === 0 ? (
-                      <p className="col-span-4 text-center text-xs text-zinc-500">No other images available</p>
-                    ) : null}
-                  </div>
-                ) : null}
-                {regenerateModal.fontReferenceUrl ? (
-                  <div className="mt-3 flex items-center gap-2 rounded-md border border-lime-300/30 bg-lime-300/[0.07] p-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={regenerateModal.fontReferenceUrl}
-                      alt="Font reference"
-                      className="h-10 w-10 rounded border border-white/10 object-cover"
-                    />
-                    <span className="flex-1 text-xs text-lime-200">Font reference selected</span>
+              </div>
+            ) : null}
+
+            {/* Prompt + action section */}
+            <form onSubmit={submitRegeneration} className="flex flex-col p-5">
+              {/* Refinement textarea — hidden when in edit text mode */}
+              {!isEditTextMode ? (
+                <textarea
+                  id="regenerate-refinement"
+                  value={refinement}
+                  onChange={(event) => setRefinement(event.target.value)}
+                  rows={4}
+                  disabled={isRegenerateModalGenerating}
+                  placeholder="Describe your adjustment..."
+                  className="w-full resize-none rounded-lg border border-white/10 bg-black/40 p-4 text-sm leading-relaxed text-zinc-100 outline-none ring-1 ring-lime-300/20 placeholder:text-zinc-600 focus:ring-2 focus:ring-lime-300/50 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              ) : null}
+
+              {/* Editable text lines — shown when in edit text mode */}
+              {isEditTextMode ? (
+                <div className="space-y-3">
+                  {isAnalyzingText ? (
+                    <div className="flex items-center justify-center gap-3 rounded-lg border border-white/10 bg-black/20 py-8 text-sm text-zinc-400">
+                      <RefreshCw size={16} aria-hidden="true" className="animate-spin" />
+                      Analyzing image text...
+                    </div>
+                  ) : regenerateModal.textBlocks && regenerateModal.textBlocks.length > 0 ? (
+	                    <>
+	                      <div className="mb-1 text-xs font-medium uppercase text-zinc-500">
+	                        Edit Text Lines
+	                      </div>
+	                      <div className="max-h-[32vh] space-y-3 overflow-y-auto pr-1">
+	                        {regenerateModal.textBlocks.map((block) => {
+	                          const isEdited = (editedTexts[block.id] ?? block.text).trim() !== block.text.trim();
+	                          return (
+	                            <div
+	                              key={block.id}
+	                              className={`relative rounded-lg border p-3 ${
+	                                isEdited
+	                                  ? "border-lime-300/70 bg-lime-300/[0.06]"
+	                                  : "border-white/10 bg-black/20"
+	                              }`}
+	                            >
+	                              {isEdited ? (
+	                                <div className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full border border-lime-300/40 bg-lime-300/15 text-lime-200">
+	                                  <Pencil size={12} aria-hidden="true" />
+	                                </div>
+	                              ) : null}
+	                              <div className="mb-2 flex items-center gap-2 pr-8">
+	                                <span className="font-mono text-[10px] text-zinc-500">{block.id}</span>
+	                                <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] text-zinc-400">
+	                                  {block.position}
+	                                </span>
+	                                <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] text-zinc-400">
+	                                  {block.size}
+	                                </span>
+	                              </div>
+	                              <input
+	                                type="text"
+	                                value={editedTexts[block.id] ?? block.text}
+	                                onChange={(e) =>
+	                                  setEditedTexts((prev) => ({ ...prev, [block.id]: e.target.value }))
+	                                }
+	                                disabled={isRegenerateModalGenerating}
+	                                aria-label={`Edit text line ${block.id}`}
+	                                className="w-full rounded border border-white/10 bg-black/40 px-3 py-2 font-mono text-sm text-zinc-100 placeholder:text-zinc-600 outline-none ring-1 ring-white/10 focus:ring-2 focus:ring-lime-300/50 disabled:cursor-not-allowed disabled:opacity-50"
+	                              />
+	                            </div>
+	                          );
+	                        })}
+	                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center rounded-lg border border-dashed border-white/10 py-8 text-sm text-zinc-500">
+                      No readable English text detected in this image.
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {/* Bottom action row */}
+              <div className="mt-4 flex items-center justify-between gap-4">
+                {/* Left: Font Reference + Edit Text buttons */}
+                <div className="flex items-center gap-3">
+                  {/* Font Reference toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setIsFontRefSelectorOpen((open) => !open)}
+                    disabled={isRegenerateModalGenerating}
+                    className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
+                      regenerateModal.fontReferenceUrl
+                        ? "border-lime-300/40 bg-lime-300/10 text-lime-200"
+                        : "border-white/15 text-zinc-300 hover:bg-white/5 hover:text-zinc-100"
+                    } disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    <Palette size={16} aria-hidden="true" />
+                    Font Reference
+                  </button>
+
+                  {/* Edit Text toggle */}
+                  {!isEditTextMode ? (
+                      <button
+                        type="button"
+                        onClick={analyzeCurrentModalText}
+                        disabled={isRegenerateModalGenerating || isAnalyzingText || !regenerateModal.resultUrl}
+                        className="flex items-center gap-2 rounded-lg border border-white/15 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-white/5 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Type size={16} aria-hidden="true" />
+                      {isAnalyzingText ? "Analyzing..." : "Edit Text"}
+                    </button>
+                  ) : (
                     <button
                       type="button"
-                      onClick={() => setRegenerateModal((m) => m ? { ...m, fontReferenceUrl: undefined } : null)}
-                      className="text-xs text-zinc-400 hover:text-zinc-200"
+                      onClick={() => setIsEditTextMode(false)}
+                      disabled={isRegenerateModalGenerating}
+                      className="flex items-center gap-2 rounded-lg border border-white/15 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-white/5 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Remove
+                      <MessageSquareText size={16} aria-hidden="true" />
+                      Prompt Mode
                     </button>
-                  </div>
-                ) : null}
+                  )}
+                </div>
+
+                {/* Generate button */}
+                <button
+                  type="submit"
+                  disabled={
+                    isRegenerateModalGenerating ||
+                    !regenerateModal.resultUrl ||
+                    (!isEditTextMode && !refinement.trim()) ||
+                    (isEditTextMode &&
+                      !regenerateModal.textBlocks?.some(
+                        (block) => (editedTexts[block.id] ?? block.text).trim() !== block.text.trim()
+                      ))
+                  }
+                  className="flex items-center gap-2 rounded-lg bg-lime-300 px-6 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                >
+                  {isRegenerating ? (
+                    <>
+                      <RefreshCw size={16} aria-hidden="true" className="animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw size={16} aria-hidden="true" />
+                      Generate
+                    </>
+                  )}
+                </button>
               </div>
+
+              {/* Error message */}
               {regenerateError ? (
-                <div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">
+                <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-100">
                   {regenerateError}
                 </div>
               ) : null}
-              <div className="mt-auto flex justify-end gap-3 pt-5">
-                <button
-                  type="button"
-                  onClick={() => setRegenerateModal(null)}
-                  disabled={isRegenerating}
-                  className="rounded-md border border-white/15 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-600"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isRegenerating || !refinement.trim()}
-                  className="rounded-md bg-lime-300 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
-                >
-                  {isRegenerating ? "Starting..." : "Regenerate"}
-                </button>
-              </div>
             </form>
           </div>
         </div>
