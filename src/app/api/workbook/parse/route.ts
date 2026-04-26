@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { setStoredWorkbook, toPublicWorkbook } from "@/lib/workbook-store";
-import { parseWorkbook, looksGarbled } from "@/lib/xlsx-parser";
+import { parseWorkbook, looksGarbled, cleanCellText } from "@/lib/xlsx-parser";
 import { fixRichTextCells } from "@/lib/ai-text-fixer";
 
 export const runtime = "nodejs";
@@ -18,6 +18,18 @@ export async function POST(request: Request) {
     }
 
     const workbook = setStoredWorkbook(await parseWorkbook(await file.arrayBuffer()));
+
+    // Clean all text fields first (handles &#10; entities, etc.)
+    const cleanRow = (row: typeof workbook.rows[0] | undefined) => {
+      if (!row) return;
+      row.requirement = cleanCellText(row.requirement);
+      row.copyText = cleanCellText(row.copyText);
+      row.style = cleanCellText(row.style);
+    };
+    cleanRow(workbook.mainImageRow);
+    for (const row of workbook.rows) {
+      cleanRow(row);
+    }
 
     // Collect cells that need AI repair
     const cellsNeedingRepair: Array<{ ref: string; field: "requirement" | "copyText" | "style"; raw: string }> = [];

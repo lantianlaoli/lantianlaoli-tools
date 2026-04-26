@@ -61,9 +61,20 @@ export function looksGarbled(text: string): boolean {
   if (text.length < 10) return false;
   const hasHexColor = /[0-9A-F]{6,}/.test(text);
   const hasCJK = /[\u4e00-\u9fff]/.test(text);
-  const hasHtmlEntity = /&#/.test(text);
+  const hasHtmlEntity = /&#\d+;/.test(text);
   const hasFontPattern = /微软雅黑|宋体|黑体/i.test(text);
   return ((hasHexColor || hasHtmlEntity) && hasCJK) || hasFontPattern;
+}
+
+export function cleanCellText(text: string): string {
+  return text
+    .replace(/&#10;/g, "\n")
+    .replace(/&#9;/g, "\t")
+    .replace(/&amp;#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function normalizeCellRef(ref: string) {
