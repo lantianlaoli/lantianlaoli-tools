@@ -10,7 +10,7 @@ const parser = new XMLParser({
 });
 
 type SheetColumns = {
-  sequence: string;
+  sequence?: string;
   size: string;
   requirement: string;
   copyText: string;
@@ -18,6 +18,20 @@ type SheetColumns = {
   imageColumns: string[];
   maxColumnIndex: number;
 };
+
+const HEADER_ALIASES = {
+  sequence: ["序号", "sequence", "seq", "no", "number", "#"],
+  size: ["尺寸", "size", "dimensions", "dimension"],
+  requirement: ["需求", "requirement", "requirements", "brief", "instruction", "instructions"],
+  copyText: ["文案", "copy", "copytext", "text", "caption"],
+  style: ["风格", "style", "styleguide", "direction"],
+} as const;
+
+const PRODUCT_HEADER_ALIASES = {
+  title: ["标题", "title", "产品标题", "producttitle", "productname", "name"],
+  description: ["描述", "description", "产品描述", "productdescription", "desc"],
+  image: ["图片", "image", "产品图片", "images", "productimage", "productimages", "photo", "photos"],
+} as const;
 
 function asArray<T>(value: T | T[] | undefined | null): T[] {
   if (!value) return [];
@@ -75,7 +89,7 @@ export function looksGarbled(text: string): boolean {
 }
 
 export function cleanCellText(text: string): string {
-  return text
+  const cleaned = text
     .replace(/&#10;/g, "\n")
     .replace(/&#9;/g, "\t")
     .replace(/&amp;#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
@@ -83,6 +97,7 @@ export function cleanCellText(text: string): string {
     .replace(/\r/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+  return /^(null|undefined)$/i.test(cleaned) ? "" : cleaned;
 }
 
 function normalizeCellRef(ref: string) {
@@ -126,15 +141,16 @@ function normalizeHeader(value: string) {
 }
 
 function findOptionalHeaderColumn(headers: Map<string, string>, names: string[]) {
+  const normalizedNames = names.map(normalizeHeader);
   for (const [col, value] of headers) {
-    if (names.includes(value)) return col;
+    if (normalizedNames.includes(value)) return col;
   }
   return undefined;
 }
 
-function findRequiredHeaderColumn(headers: Map<string, string>, names: string[]) {
+function findRequiredHeaderColumn(headers: Map<string, string>, names: string[], sheetName = "Sheet1") {
   const col = findOptionalHeaderColumn(headers, names);
-  if (!col) throw new Error(`Sheet1 is missing required header: ${names[0]}`);
+  if (!col) throw new Error(`${sheetName} is missing required header: ${names[0]} / ${names[1]}`);
   return col;
 }
 
@@ -149,16 +165,16 @@ function getSheetColumns(cells: Map<string, string>): SheetColumns {
     if (cellRef.row === 1) headers.set(cellRef.col, normalizeHeader(value));
   }
 
-  const sequence = findRequiredHeaderColumn(headers, ["序号"]);
-  const size = findRequiredHeaderColumn(headers, ["尺寸"]);
-  const requirement = findRequiredHeaderColumn(headers, ["需求"]);
-  const copyText = findRequiredHeaderColumn(headers, ["文案"]);
-  const style = findOptionalHeaderColumn(headers, ["风格"]);
+  const sequence = findOptionalHeaderColumn(headers, [...HEADER_ALIASES.sequence]);
+  const size = findRequiredHeaderColumn(headers, [...HEADER_ALIASES.size]);
+  const requirement = findRequiredHeaderColumn(headers, [...HEADER_ALIASES.requirement]);
+  const copyText = findRequiredHeaderColumn(headers, [...HEADER_ALIASES.copyText]);
+  const style = findOptionalHeaderColumn(headers, [...HEADER_ALIASES.style]);
   const requirementIndex = columnToIndex(requirement);
   const copyTextIndex = columnToIndex(copyText);
 
   if (requirementIndex >= copyTextIndex) {
-    throw new Error("Sheet1 header 文案 must appear after 需求.");
+    throw new Error("Sheet1 header 文案 / copy must appear after 需求 / requirement.");
   }
 
   const imageColumns = Array.from(
@@ -301,6 +317,62 @@ function imagesForRow(values: Record<string, string>, imageColumns: string[], im
     .filter((image): image is WorkbookImage => Boolean(image));
 }
 
+function getHeaderMap(cells: Map<string, string>) {
+  const headers = new Map<string, string>();
+  for (const [ref, value] of cells) {
+    const cellRef = normalizeCellRef(ref);
+    if (cellRef?.row === 1) headers.set(cellRef.col, normalizeHeader(value));
+  }
+  return headers;
+}
+
+function getSheetMaxColumnIndex(cells: Map<string, string>) {
+  let maxColumnIndex = 1;
+  for (const ref of cells.keys()) {
+    const cellRef = normalizeCellRef(ref);
+    if (cellRef) maxColumnIndex = Math.max(maxColumnIndex, columnToIndex(cellRef.col));
+  }
+  return maxColumnIndex;
+}
+
+function getProductContextFromSheet2(
+  sheet2: Map<string, string>,
+  _imageMap: Map<string, WorkbookImage>
+) {
+  const headers = getHeaderMap(sheet2);
+  const maxColumnIndex = getSheetMaxColumnIndex(sheet2);
+
+  // If Sheet2 is single-column (or has no meaningful header row), fall back to the original
+  // A2/A4 positions for backward compatibility with existing workbooks.
+  // Use mainImageRow reference images as product images when falling back.
+  if (maxColumnIndex === 1) {
+    return {
+      title: sheet2.get("A2")?.trim() ?? "",
+      description: sheet2.get("A4")?.trim() ?? "",
+      images: [],
+      imageColumns: [],
+      fallbackImages: true,
+    };
+  }
+
+  const titleColumn = findRequiredHeaderColumn(headers, [...PRODUCT_HEADER_ALIASES.title], "Sheet2");
+  const descriptionColumn = findRequiredHeaderColumn(headers, [...PRODUCT_HEADER_ALIASES.description], "Sheet2");
+  const firstImageColumn = findRequiredHeaderColumn(headers, [...PRODUCT_HEADER_ALIASES.image], "Sheet2");
+
+  const imageColumns = Array.from(
+    { length: maxColumnIndex - columnToIndex(firstImageColumn) + 1 },
+    (_, index) => indexToColumn(columnToIndex(firstImageColumn) + index)
+  );
+  const row2 = rowObject(sheet2, 2, maxColumnIndex);
+
+  return {
+    title: row2[titleColumn],
+    description: row2[descriptionColumn],
+    images: imagesForRow(row2, imageColumns, _imageMap),
+    imageColumns,
+  };
+}
+
 function buildParsedRow(
   cells: Map<string, string>,
   imageMap: Map<string, WorkbookImage>,
@@ -313,7 +385,7 @@ function buildParsedRow(
   return {
     id: `row-${rowNumber}`,
     rowNumber,
-    sequence: values[columns.sequence],
+    sequence: columns.sequence ? values[columns.sequence] : "",
     size,
     requirement: values[columns.requirement],
     copyText: values[columns.copyText],
@@ -359,11 +431,20 @@ export async function parseWorkbook(buffer: ArrayBuffer | Buffer): Promise<Parse
     }
   }
 
+  const productContext = getProductContextFromSheet2(sheet2, imageMap);
+  if (!productContext.fallbackImages) {
+    if (!productContext.imageColumns.length) {
+      warnings.push("Sheet2 is missing required header: 图片 / image");
+    } else if (!productContext.images.length) {
+      warnings.push(`No product reference images found in Sheet2 row 2 columns ${productContext.imageColumns.join(":")}.`);
+    }
+  }
+
   return {
     product: {
-      title: sheet2.get("A2")?.trim() ?? "",
-      description: sheet2.get("A4")?.trim() ?? "",
-      images: mainImageRow?.referenceImages ?? [],
+      title: productContext.title,
+      description: productContext.description,
+      images: productContext.fallbackImages ? (mainImageRow?.referenceImages ?? []) : productContext.images,
     },
     rows,
     mainImageRow,
