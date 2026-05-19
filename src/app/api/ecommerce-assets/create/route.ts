@@ -10,6 +10,8 @@ export async function POST(request: Request) {
       productPhotoDataUrls?: string[];
       productPhotoDataUrl?: string;
       textLanguage?: unknown;
+      imageResolution?: string;
+      videoResolution?: string;
     };
 
     const productPhotoDataUrls = body.productPhotoDataUrls && body.productPhotoDataUrls.length > 0
@@ -26,6 +28,8 @@ export async function POST(request: Request) {
     const job = await createEcommerceAssetsJob({
       productPhotoDataUrls: validUrls,
       textLanguage: body.textLanguage,
+      imageResolution: body.imageResolution,
+      videoResolution: body.videoResolution,
     });
 
     return NextResponse.json({ success: true, jobId: job.id, job }, { status: 202 });

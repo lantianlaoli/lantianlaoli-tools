@@ -23,9 +23,11 @@ import type {
   EcommerceProductView,
   EcommerceSlotStatus,
   EcommerceTextLanguage,
+  KieResolution,
 } from "@/lib/types";
 
 type PageStatus = "idle" | "reading" | "starting" | "polling" | "done" | "error";
+type VideoResolution = "480p" | "720p";
 
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -234,6 +236,8 @@ export default function EcommerceAssetsPage() {
     { view: "back", dataUrl: null, fileName: null },
   ]);
   const [readingView, setReadingView] = useState<EcommerceProductView | null>(null);
+  const [imageResolution, setImageResolution] = useState<KieResolution>("1K");
+  const [videoResolution, setVideoResolution] = useState<VideoResolution>("480p");
   const [job, setJob] = useState<EcommerceAssetsJob | null>(null);
   const jobRef = useRef<EcommerceAssetsJob | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -340,7 +344,12 @@ export default function EcommerceAssetsPage() {
       const response = await fetch("/api/ecommerce-assets/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productPhotoDataUrls: uploadedUrls, textLanguage }),
+        body: JSON.stringify({
+          productPhotoDataUrls: uploadedUrls,
+          textLanguage,
+          imageResolution,
+          videoResolution,
+        }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "启动生成失败。");
@@ -465,6 +474,37 @@ export default function EcommerceAssetsPage() {
               <p className="mt-2 text-xs leading-5 text-zinc-500">
                 控制生成图片、storyboard 和视频提示词的整体语言语境。
               </p>
+            </div>
+            <div className="mt-3 rounded-md border border-white/10 bg-black/20 p-3">
+              <label className="text-xs font-semibold uppercase text-zinc-500" htmlFor="ecommerce-image-resolution">
+                图片画质
+              </label>
+              <select
+                id="ecommerce-image-resolution"
+                value={imageResolution}
+                onChange={(event) => setImageResolution(event.target.value as KieResolution)}
+                disabled={isBusy}
+                className="mt-2 h-10 w-full rounded-md border border-white/15 bg-black/30 px-3 text-sm text-zinc-100 outline-none disabled:opacity-50"
+              >
+                <option value="1K">1K（标准）</option>
+                <option value="2K" disabled>2K（高级）— 即将开放</option>
+                <option value="4K" disabled>4K（超清）— 即将开放</option>
+              </select>
+            </div>
+            <div className="mt-3 rounded-md border border-white/10 bg-black/20 p-3">
+              <label className="text-xs font-semibold uppercase text-zinc-500" htmlFor="ecommerce-video-resolution">
+                视频画质
+              </label>
+              <select
+                id="ecommerce-video-resolution"
+                value={videoResolution}
+                onChange={(event) => setVideoResolution(event.target.value as VideoResolution)}
+                disabled={isBusy}
+                className="mt-2 h-10 w-full rounded-md border border-white/15 bg-black/30 px-3 text-sm text-zinc-100 outline-none disabled:opacity-50"
+              >
+                <option value="480p">480p（标准）</option>
+                <option value="720p" disabled>720p（高清）— 即将开放</option>
+              </select>
             </div>
             <button
               type="button"

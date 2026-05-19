@@ -116,6 +116,8 @@ export type EcommerceAssetsJob = {
   id: string;
   status: "preparing" | "processing" | "completed" | "failed";
   textLanguage: EcommerceTextLanguage;
+  imageResolution?: string;
+  videoResolution?: string;
   productImageUrl?: string;
   productImageUrls?: string[];
   brief?: EcommerceCreativeBrief;

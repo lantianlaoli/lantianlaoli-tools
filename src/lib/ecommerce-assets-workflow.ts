@@ -20,6 +20,7 @@ import type {
   EcommerceImageSlot,
   EcommerceSlotStatus,
   EcommerceTextLanguage,
+  KieResolution,
 } from "./types";
 
 function normalizeTextLanguage(value: unknown): EcommerceTextLanguage {
@@ -43,6 +44,7 @@ async function createImageSlots(input: {
   productImageUrl: string;
   productImageUrls: string[];
   textLanguage: EcommerceTextLanguage;
+  imageResolution: KieResolution;
 }) {
   const promptSlots = buildEcommerceImagePrompts(input.brief, input.textLanguage, input.productImageUrls.length);
   const slots: EcommerceImageSlot[] = [];
@@ -52,7 +54,7 @@ async function createImageSlots(input: {
       prompt: promptSlot.prompt,
       inputUrls: input.productImageUrls,
       aspectRatio: "1:1",
-      resolution: "2K",
+      resolution: input.imageResolution,
     });
     slots.push({
       id: `${promptSlot.kind}-${promptSlot.index}`,
@@ -74,8 +76,14 @@ async function createImageSlots(input: {
 export async function createEcommerceAssetsJob(input: {
   productPhotoDataUrls: string[];
   textLanguage?: unknown;
+  imageResolution?: string;
+  videoResolution?: string;
 }) {
   const textLanguage = normalizeTextLanguage(input.textLanguage);
+  const imageResolution: KieResolution = ["1K", "2K", "4K"].includes(input.imageResolution ?? "")
+    ? (input.imageResolution as KieResolution)
+    : "1K";
+  const videoResolution: "480p" | "720p" = input.videoResolution === "720p" ? "720p" : "480p";
   const jobId = generateEcommerceAssetsJobId();
   const now = Date.now();
   let job: EcommerceAssetsJob = {
@@ -109,18 +117,20 @@ export async function createEcommerceAssetsJob(input: {
       brief = fallbackEcommerceBrief(textLanguage);
     }
 
-    const imageSlots = await createImageSlots({ brief, productImageUrl, productImageUrls, textLanguage });
+    const imageSlots = await createImageSlots({ brief, productImageUrl, productImageUrls, textLanguage, imageResolution });
     const storyboardPrompt = buildEcommerceStoryboardPrompt(brief, textLanguage, productImageUrls.length);
     const storyboardTaskId = await createKieImageTask({
       prompt: storyboardPrompt,
       inputUrls: productImageUrls,
       aspectRatio: "1:1",
-      resolution: "2K",
+      resolution: imageResolution,
     });
 
     job = {
       ...job,
       status: "processing",
+      imageResolution,
+      videoResolution,
       productImageUrl,
       productImageUrls,
       brief,
@@ -176,11 +186,12 @@ export async function refreshEcommerceAssetsJob(currentJob: EcommerceAssetsJob):
     const productRefs = currentJob.productImageUrls && currentJob.productImageUrls.length > 0
       ? currentJob.productImageUrls
       : [currentJob.productImageUrl];
+    const videoRes: "480p" | "720p" = currentJob.videoResolution === "720p" ? "720p" : "480p";
     const taskId = await createKieSeedanceVideoTask({
       prompt: video.prompt,
       referenceImageUrls: [...productRefs, video.storyboardUrl],
       aspectRatio: "1:1",
-      resolution: "720p",
+      resolution: videoRes,
       duration: 15,
     });
     video = { ...video, taskId, status: "processing" };
