@@ -711,6 +711,26 @@ export default function EcommerceAssetsPage() {
         {/* 生成结果 */}
         <section>
           <h2 className="mb-4 text-base font-semibold text-zinc-100">生成结果</h2>
+          {job?.brief ? (
+            <div className="mb-6 rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">产品标题</h3>
+              <p className="mt-1.5 text-sm font-medium text-zinc-100">{job.brief.productIdentity}</p>
+              {job.brief.sellingPoints.length > 0 ? (
+                <>
+                  <div className="my-3 h-px bg-white/[0.06]" />
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">核心卖点</h3>
+                  <ul className="mt-2 space-y-1">
+                    {job.brief.sellingPoints.filter(Boolean).slice(0, 5).map((point, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
+                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-lime-400" />
+                        {point}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </div>
+          ) : null}
           <div className="flex flex-col gap-6">
             <SectionShell
               title="轮播图"
