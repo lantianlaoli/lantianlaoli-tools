@@ -9,9 +9,14 @@ type PromptSlot = Pick<EcommerceImageSlot, "kind" | "index" | "title" | "prompt"
 
 function languageInstruction(textLanguage: EcommerceTextLanguage) {
   if (textLanguage === "zh") {
-    return "使用简洁中文可见文案。文字必须少、短、易读，不要大段说明，不要中英混排。";
+    return [
+      "使用简洁中文可见文案。文字必须少、短、易读，不要大段说明，不要中英混排。",
+      "所有新增或叠加的可见文字必须是简体中文，包括标题、标签、卖点、对比文案、说明、口号和装饰性小字。",
+      "不要生成英文营销文案，例如 English headings, labels, slogans, captions, comparison labels, or lifestyle taglines.",
+      "产品照片中原本存在的英文 logo、印花或包装文字可以保留；不要把它当作新增营销文案翻译或替换。",
+    ].join(" ");
   }
-  return "Use concise English text only. Keep visible text minimal, short, readable, and accurately spelled.";
+  return "Use concise English text only. Keep visible text minimal, short, readable, and accurately spelled. Preserve any original product logo, print, or packaging text from the reference photo.";
 }
 
 function sellingPointText(brief: EcommerceCreativeBrief) {
@@ -89,7 +94,9 @@ export async function analyzeProductForEcommerceAssets(
               "productCategory, productIdentity, materialsAndColors, sellingPoints, designLanguage, carouselDirection, detailDirection, videoDirection.",
               "The creative direction must be clean, premium, low-text, product-led, and suitable for marketplace carousel/detail images.",
               "Use all views to build a comprehensive understanding of the product's shape, materials, and features.",
-              `Visible text language for generated assets: ${textLanguage === "zh" ? "Chinese" : "English"}.`,
+              textLanguage === "zh"
+                ? "Write the returned creative fields in Simplified Chinese. All newly generated visible marketing text in assets must be Simplified Chinese. Existing product logo/print/package text visible in the reference photo may remain unchanged."
+                : "Write the returned creative fields in English. All newly generated visible marketing text in assets must be English.",
               customRequirements ? `\nUser custom requirements (MUST follow when generating all assets): ${customRequirements}` : "",
             ].join("\n"),
           },
@@ -277,6 +284,7 @@ export function buildEcommerceStoryboardPrompt(
       ? "Multiple product reference images are provided (front, side, back views). Use all views to accurately represent the product from different angles throughout the storyboard beats."
       : "Use the product photo as the strict identity reference and preserve the exact product.",
     `Visible text language: ${textLanguage === "zh" ? "中文" : "English"}.`,
+    languageInstruction(textLanguage),
     "Storyboard structure: 6 clean beats in a grid: product reveal, macro detail, core benefit, use context, premium hero motion, final hero shot.",
     `Product category: ${brief.productCategory}.`,
     `Product identity: ${brief.productIdentity}.`,
@@ -298,6 +306,7 @@ export function buildEcommerceVideoPrompt(brief: EcommerceCreativeBrief, textLan
       : "Use reference-image generation mode. Preserve the exact product appearance, proportions, materials, color, and recognizable details.",
     "Animate through these beats: product reveal, macro detail, core selling point, clean use context, premium hero motion, final hero shot.",
     `Visible text and any generated audio language: ${textLanguage === "zh" ? "Chinese" : "English"}.`,
+    languageInstruction(textLanguage),
     `Product category: ${brief.productCategory}.`,
     `Selling points: ${sellingPointText(brief)}.`,
     `Design language: ${brief.designLanguage}.`,

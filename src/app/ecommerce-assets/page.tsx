@@ -20,6 +20,10 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getEcommerceVideoPresentation } from "@/lib/ecommerce-assets-presentation";
+import {
+  ECOMMERCE_LANGUAGE_STORAGE_KEY,
+  normalizeEcommerceTextLanguage,
+} from "@/lib/ecommerce-language";
 import type {
   EcommerceAssetsJob,
   EcommerceImageSlot,
@@ -43,6 +47,14 @@ const VIEW_META: Record<EcommerceProductView, { label: string; sub: string }> = 
   side: { label: "侧视图", sub: "Side View" },
   back: { label: "背视图", sub: "Back View" },
 };
+
+function initialTextLanguage(): EcommerceTextLanguage {
+  if (typeof window === "undefined") return "zh";
+  const params = new URLSearchParams(window.location.search);
+  return normalizeEcommerceTextLanguage(
+    params.get("lang") ?? window.localStorage.getItem(ECOMMERCE_LANGUAGE_STORAGE_KEY)
+  );
+}
 
 function statusLabel(status: EcommerceSlotStatus) {
   if (status === "success") return "完成";
@@ -256,7 +268,7 @@ function ProductPhotoSlot({
 
 export default function EcommerceAssetsPage() {
   const [status, setStatus] = useState<PageStatus>("idle");
-  const [textLanguage, setTextLanguage] = useState<EcommerceTextLanguage>("en");
+  const [textLanguage, setTextLanguage] = useState<EcommerceTextLanguage>(initialTextLanguage);
   const [customRequirements, setCustomRequirements] = useState("");
   const [productPhotos, setProductPhotos] = useState<EcommerceProductPhotoSlot[]>([
     { view: "front", dataUrl: null, fileName: null },
@@ -500,6 +512,10 @@ export default function EcommerceAssetsPage() {
   }, [job]);
 
   useEffect(() => {
+    window.localStorage.setItem(ECOMMERCE_LANGUAGE_STORAGE_KEY, textLanguage);
+  }, [textLanguage]);
+
+  useEffect(() => {
     if (status !== "polling" || !job) return;
     const interval = window.setInterval(() => {
       pollJob().catch((pollError) => {
@@ -711,26 +727,6 @@ export default function EcommerceAssetsPage() {
         {/* 生成结果 */}
         <section>
           <h2 className="mb-4 text-base font-semibold text-zinc-100">生成结果</h2>
-          {job?.brief ? (
-            <div className="mb-6 rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">产品标题</h3>
-              <p className="mt-1.5 text-sm font-medium text-zinc-100">{job.brief.productIdentity}</p>
-              {job.brief.sellingPoints.length > 0 ? (
-                <>
-                  <div className="my-3 h-px bg-white/[0.06]" />
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">核心卖点</h3>
-                  <ul className="mt-2 space-y-1">
-                    {job.brief.sellingPoints.filter(Boolean).slice(0, 5).map((point, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
-                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-lime-400" />
-                        {point}
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ) : null}
-            </div>
-          ) : null}
           <div className="flex flex-col gap-6">
             <SectionShell
               title="轮播图"

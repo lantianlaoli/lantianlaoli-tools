@@ -13,7 +13,7 @@ test("ecommerce image prompts keep English text concise by default", () => {
   const brief = fallbackEcommerceBrief("en");
   const prompts = buildEcommerceImagePrompts(brief, "en");
 
-  assert.equal(prompts.length, 6);
+  assert.equal(prompts.length, 12);
   assert.equal(prompts.every((slot) => slot.prompt.includes('Canvas/aspect ratio: 1:1')), true);
   assert.equal(prompts.every((slot) => slot.prompt.includes("Keep visible text minimal")), true);
   assert.equal(prompts.every((slot) => slot.prompt.includes("Use concise English text only")), true);
@@ -27,7 +27,10 @@ test("ecommerce image prompts support concise Chinese text", () => {
   const storyboardPrompt = buildEcommerceStoryboardPrompt(brief, "zh");
 
   assert.equal(prompts.every((slot) => slot.prompt.includes("使用简洁中文可见文案")), true);
+  assert.equal(prompts.every((slot) => slot.prompt.includes("所有新增或叠加的可见文字必须是简体中文")), true);
+  assert.equal(prompts.every((slot) => slot.prompt.includes("产品照片中原本存在的英文 logo、印花或包装文字可以保留")), true);
   assert.match(storyboardPrompt, /中文/);
+  assert.match(storyboardPrompt, /所有新增或叠加的可见文字必须是简体中文/);
 });
 
 test("first carousel prompt enforces a clean white background main image", () => {
@@ -62,7 +65,7 @@ test("POST /api/ecommerce-assets/create rejects missing product photo", async ()
   assert.deepEqual(await response.json(), { error: "At least one productPhotoDataUrl is required." });
 });
 
-test("POST /api/ecommerce-assets/create uploads the photo and starts six image tasks plus storyboard", async () => {
+test("POST /api/ecommerce-assets/create uploads the photo and starts image tasks plus storyboard", async () => {
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
   const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
@@ -123,13 +126,13 @@ test("POST /api/ecommerce-assets/create uploads the photo and starts six image t
     assert.equal(response.status, 202);
     const payload = await response.json();
     assert.equal(typeof payload.jobId, "string");
-    assert.equal(payload.job.carouselImages.length, 3);
-    assert.equal(payload.job.detailImages.length, 3);
-    assert.equal(createTaskBodies.length, 7);
-    assert.equal(createTaskBodies.filter((body) => body.model === "gpt-image-2-image-to-image").length, 7);
+    assert.equal(payload.job.carouselImages.length, 6);
+    assert.equal(payload.job.detailImages.length, 6);
+    assert.equal(createTaskBodies.length, 13);
+    assert.equal(createTaskBodies.filter((body) => body.model === "gpt-image-2-image-to-image").length, 13);
     assert.equal(createTaskBodies.every((body) => body.input.aspect_ratio === "1:1"), true);
     assert.equal(payload.job.carouselImages[0].taskId, "task-1");
-    assert.equal(payload.job.video.storyboardTaskId, "task-7");
+    assert.equal(payload.job.video.storyboardTaskId, "task-13");
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKieApiKey === undefined) delete process.env.KIE_API_KEY;
@@ -209,7 +212,7 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
     assert.equal(firstStatus.job.carouselImages.every((slot: { status: string }) => slot.status === "success"), true);
     assert.equal(firstStatus.job.detailImages.every((slot: { status: string }) => slot.status === "success"), true);
     assert.equal(firstStatus.job.video.status, "processing");
-    assert.equal(firstStatus.job.video.storyboardUrl, "https://cdn.example.com/image-task-7.mp4");
+    assert.equal(firstStatus.job.video.storyboardUrl, "https://cdn.example.com/image-task-13.mp4");
 
     const secondStatusResponse = await refreshEcommerceAssetsStatus(
       new Request("http://localhost:3000/api/ecommerce-assets/status", {

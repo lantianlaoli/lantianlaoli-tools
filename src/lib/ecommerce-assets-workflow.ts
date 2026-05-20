@@ -8,6 +8,7 @@ import {
 import {
   generateEcommerceAssetsJobId,
 } from "./ecommerce-assets-store";
+import { normalizeEcommerceTextLanguage } from "./ecommerce-language";
 import {
   createKieImageTask,
   createKieSeedanceVideoTask,
@@ -23,10 +24,6 @@ import type {
   KieAspectRatio,
   KieResolution,
 } from "./types";
-
-function normalizeTextLanguage(value: unknown): EcommerceTextLanguage {
-  return value === "zh" ? "zh" : "en";
-}
 
 function isTerminal(status: EcommerceSlotStatus) {
   return status === "success" || status === "fail";
@@ -84,7 +81,7 @@ export async function createEcommerceAssetsJob(input: {
   videoAspectRatio?: string;
   videoResolution?: string;
 }) {
-  const textLanguage = normalizeTextLanguage(input.textLanguage);
+  const textLanguage = normalizeEcommerceTextLanguage(input.textLanguage);
   const imageResolution: KieResolution = ["1K", "2K", "4K"].includes(input.imageResolution ?? "")
     ? (input.imageResolution as KieResolution)
     : "1K";
@@ -233,4 +230,4 @@ export async function refreshEcommerceAssetsJob(currentJob: EcommerceAssetsJob):
   return { ...updated, status: overallStatus(updated) };
 }
 
-export { normalizeTextLanguage };
+export { normalizeEcommerceTextLanguage };
