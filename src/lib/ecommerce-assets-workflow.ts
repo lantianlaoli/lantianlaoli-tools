@@ -17,6 +17,8 @@ import {
 } from "./kie";
 import { getStoredJobStatus } from "./job-store";
 import type {
+  EcommerceAssetScope,
+  EcommerceAssetScopeOption,
   EcommerceAssetsJob,
   EcommerceCreativeBrief,
   EcommerceImageSlot,
@@ -30,10 +32,54 @@ function isTerminal(status: EcommerceSlotStatus) {
   return status === "success" || status === "fail";
 }
 
+export function normalizeEcommerceAssetScope(value: unknown): EcommerceAssetScope {
+  return value === "carousel" || value === "detail" || value === "video" || value === "all" ? value : "all";
+}
+
+const ALL_ASSET_SCOPE_OPTIONS: EcommerceAssetScopeOption[] = ["carousel", "detail", "video"];
+
+export function normalizeEcommerceAssetScopes(value: unknown, legacyScope?: unknown): EcommerceAssetScopeOption[] {
+  if (Array.isArray(value)) {
+    const scopes = value.filter((scope): scope is EcommerceAssetScopeOption =>
+      scope === "carousel" || scope === "detail" || scope === "video"
+    );
+    const uniqueScopes = ALL_ASSET_SCOPE_OPTIONS.filter((scope) => scopes.includes(scope));
+    if (uniqueScopes.length > 0) return uniqueScopes;
+  }
+
+  const normalizedLegacyScope = normalizeEcommerceAssetScope(legacyScope);
+  return normalizedLegacyScope === "all" ? ALL_ASSET_SCOPE_OPTIONS : [normalizedLegacyScope];
+}
+
+function primaryAssetScope(scopes: EcommerceAssetScopeOption[]): EcommerceAssetScope {
+  return scopes.length === ALL_ASSET_SCOPE_OPTIONS.length ? "all" : scopes[0] ?? "all";
+}
+
+function activeScopes(job: Pick<EcommerceAssetsJob, "assetScope" | "assetScopes">): EcommerceAssetScopeOption[] {
+  return job.assetScopes?.length ? job.assetScopes : normalizeEcommerceAssetScopes(undefined, job.assetScope);
+}
+
+function includesCarousel(scopes: EcommerceAssetScopeOption[]) {
+  return scopes.includes("carousel");
+}
+
+function includesDetail(scopes: EcommerceAssetScopeOption[]) {
+  return scopes.includes("detail");
+}
+
+function includesVideo(scopes: EcommerceAssetScopeOption[]) {
+  return scopes.includes("video");
+}
+
 function overallStatus(job: EcommerceAssetsJob): EcommerceAssetsJob["status"] {
-  const imageSlots = [...job.carouselImages, ...job.detailImages];
-  const allDone = imageSlots.every((slot) => isTerminal(slot.status)) && isTerminal(job.video.status);
-  if (allDone) return imageSlots.some((slot) => slot.status === "fail") || job.video.status === "fail" ? "failed" : "completed";
+  const scopes = activeScopes(job);
+  const imageSlots = [
+    ...(includesCarousel(scopes) ? job.carouselImages : []),
+    ...(includesDetail(scopes) ? job.detailImages : []),
+  ];
+  const needsVideo = includesVideo(scopes);
+  const allDone = imageSlots.every((slot) => isTerminal(slot.status)) && (!needsVideo || isTerminal(job.video.status));
+  if (allDone) return imageSlots.some((slot) => slot.status === "fail") || (needsVideo && job.video.status === "fail") ? "failed" : "completed";
   if (job.error) return "failed";
   return "processing";
 }
@@ -45,8 +91,12 @@ async function createImageSlots(input: {
   textLanguage: EcommerceTextLanguage;
   imageResolution: KieResolution;
   imageAspectRatio: KieAspectRatio;
+  assetScopes: EcommerceAssetScopeOption[];
 }) {
-  const promptSlots = buildEcommerceImagePrompts(input.brief, input.textLanguage, input.productImageUrls.length);
+  const promptSlots = buildEcommerceImagePrompts(input.brief, input.textLanguage, input.productImageUrls.length).filter((slot) => {
+    if (slot.kind === "carousel") return includesCarousel(input.assetScopes);
+    return includesDetail(input.assetScopes);
+  });
   const slots: EcommerceImageSlot[] = [];
   const callBackUrl = getKieCallbackUrl();
 
@@ -83,8 +133,12 @@ export async function createEcommerceAssetsJob(input: {
   imageAspectRatio?: string;
   videoAspectRatio?: string;
   videoResolution?: string;
+  assetScope?: unknown;
+  assetScopes?: unknown;
 }) {
   const textLanguage = normalizeEcommerceTextLanguage(input.textLanguage);
+  const assetScopes = normalizeEcommerceAssetScopes(input.assetScopes, input.assetScope);
+  const assetScope = primaryAssetScope(assetScopes);
   const imageResolution: KieResolution = ["1K", "2K", "4K"].includes(input.imageResolution ?? "")
     ? (input.imageResolution as KieResolution)
     : "1K";
@@ -100,6 +154,8 @@ export async function createEcommerceAssetsJob(input: {
   let job: EcommerceAssetsJob = {
     id: jobId,
     status: "preparing",
+    assetScope,
+    assetScopes,
     textLanguage,
     customRequirements: input.customRequirements,
     imageAspectRatio,
@@ -131,15 +187,17 @@ export async function createEcommerceAssetsJob(input: {
       brief = fallbackEcommerceBrief(textLanguage);
     }
 
-    const imageSlots = await createImageSlots({ brief, productImageUrl, productImageUrls, textLanguage, imageResolution, imageAspectRatio });
-    const storyboardPrompt = buildEcommerceStoryboardPrompt(brief, textLanguage, productImageUrls.length);
-    const storyboardTaskId = await createKieImageTask({
-      prompt: storyboardPrompt,
-      inputUrls: productImageUrls,
-      aspectRatio: videoAspectRatio,
-      resolution: imageResolution,
-      callBackUrl: getKieCallbackUrl(),
-    });
+    const imageSlots = await createImageSlots({ brief, productImageUrl, productImageUrls, textLanguage, imageResolution, imageAspectRatio, assetScopes });
+    const storyboardPrompt = includesVideo(assetScopes) ? buildEcommerceStoryboardPrompt(brief, textLanguage, productImageUrls.length) : "";
+    const storyboardTaskId = storyboardPrompt
+      ? await createKieImageTask({
+          prompt: storyboardPrompt,
+          inputUrls: productImageUrls,
+          aspectRatio: videoAspectRatio,
+          resolution: imageResolution,
+          callBackUrl: getKieCallbackUrl(),
+        })
+      : undefined;
 
     job = {
       ...job,
@@ -153,7 +211,7 @@ export async function createEcommerceAssetsJob(input: {
       video: {
         storyboardTaskId,
         status: "waiting",
-        prompt: buildEcommerceVideoPrompt(brief, textLanguage, productImageUrls.length),
+        prompt: includesVideo(assetScopes) ? buildEcommerceVideoPrompt(brief, textLanguage, productImageUrls.length) : "",
       },
       updatedAt: Date.now(),
     };
@@ -180,8 +238,9 @@ export async function refreshEcommerceAssetsJob(currentJob: EcommerceAssetsJob):
   const carouselImages = await Promise.all(currentJob.carouselImages.map(refreshImageSlot));
   const detailImages = await Promise.all(currentJob.detailImages.map(refreshImageSlot));
   let video = { ...currentJob.video };
+  const needsVideo = includesVideo(activeScopes(currentJob));
 
-  if (video.storyboardTaskId && !video.storyboardUrl && video.status !== "fail") {
+  if (needsVideo && video.storyboardTaskId && !video.storyboardUrl && video.status !== "fail") {
     const storyboardStatus = await getStoredJobStatus(video.storyboardTaskId);
     if (storyboardStatus?.status === "success" && storyboardStatus.resultUrl) {
       video = { ...video, storyboardUrl: storyboardStatus.resultUrl, status: "processing" };
@@ -193,6 +252,7 @@ export async function refreshEcommerceAssetsJob(currentJob: EcommerceAssetsJob):
   }
 
   if (
+    needsVideo &&
     video.storyboardUrl &&
     !video.taskId &&
     video.status !== "fail" &&

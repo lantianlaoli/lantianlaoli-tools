@@ -15,6 +15,16 @@ export function getEcommerceVideoPresentation(job: EcommerceAssetsJob | null): {
     };
   }
 
+  const scopes = job.assetScopes?.length ? job.assetScopes : job.assetScope && job.assetScope !== "all" ? [job.assetScope] : ["carousel", "detail", "video"];
+  if (!scopes.includes("video")) {
+    return {
+      status: "waiting",
+      badgeLabel: "未生成",
+      hasStarted: false,
+      placeholder: "本次未生成",
+    };
+  }
+
   return {
     status: job.video.status,
     badgeLabel: "",

@@ -171,6 +171,115 @@ test("POST /api/ecommerce-assets/create uploads the photo and starts image tasks
   }
 });
 
+test("POST /api/ecommerce-assets/create honors assetScope", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKieApiKey = process.env.KIE_API_KEY;
+  const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
+  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const createTaskBodies: Array<{ model: string; input: Record<string, unknown> }> = [];
+  process.env.KIE_API_KEY = "test-kie-key";
+  process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "https://kieai.redpandaai.co/api/file-base64-upload") {
+      return new Response(
+        JSON.stringify({ success: true, data: { downloadUrl: "https://cdn.example.com/product.png" } }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url === "https://openrouter.ai/api/v1/chat/completions") {
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(fallbackEcommerceBrief("en")) } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url === "https://api.kie.ai/api/v1/jobs/createTask") {
+      createTaskBodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ code: 200, data: { taskId: `scope-task-${createTaskBodies.length}` } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+
+  async function createScoped(assetScope: unknown) {
+    createTaskBodies.length = 0;
+    const response = await createEcommerceAssets(
+      new Request("http://localhost:3000/api/ecommerce-assets/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ productPhotoDataUrls: ["data:image/png;base64,AA=="], textLanguage: "en", assetScope }),
+      })
+    );
+    assert.equal(response.status, 202);
+    return response.json();
+  }
+
+  async function createScopeList(assetScopes: unknown) {
+    createTaskBodies.length = 0;
+    const response = await createEcommerceAssets(
+      new Request("http://localhost:3000/api/ecommerce-assets/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ productPhotoDataUrls: ["data:image/png;base64,AA=="], textLanguage: "en", assetScopes }),
+      })
+    );
+    assert.equal(response.status, 202);
+    return response.json();
+  }
+
+  try {
+    const carousel = await createScoped("carousel");
+    assert.equal(carousel.job.assetScope, "carousel");
+    assert.equal(carousel.job.carouselImages.length, 6);
+    assert.equal(carousel.job.detailImages.length, 0);
+    assert.equal(carousel.job.video.storyboardTaskId, undefined);
+    assert.equal(createTaskBodies.length, 6);
+    assert.equal(createTaskBodies.every((body) => body.model === "gpt-image-2-image-to-image"), true);
+
+    const detail = await createScoped("detail");
+    assert.equal(detail.job.assetScope, "detail");
+    assert.equal(detail.job.carouselImages.length, 0);
+    assert.equal(detail.job.detailImages.length, 6);
+    assert.equal(detail.job.video.storyboardTaskId, undefined);
+    assert.equal(createTaskBodies.length, 6);
+
+    const video = await createScoped("video");
+    assert.equal(video.job.assetScope, "video");
+    assert.equal(video.job.carouselImages.length, 0);
+    assert.equal(video.job.detailImages.length, 0);
+    assert.equal(typeof video.job.video.storyboardTaskId, "string");
+    assert.equal(createTaskBodies.length, 1);
+
+    const invalid = await createScoped("bogus");
+    assert.equal(invalid.job.assetScope, "all");
+    assert.deepEqual(invalid.job.assetScopes, ["carousel", "detail", "video"]);
+    assert.equal(invalid.job.carouselImages.length, 6);
+    assert.equal(invalid.job.detailImages.length, 6);
+    assert.equal(typeof invalid.job.video.storyboardTaskId, "string");
+    assert.equal(createTaskBodies.length, 13);
+
+    const carouselAndDetail = await createScopeList(["carousel", "detail"]);
+    assert.equal(carouselAndDetail.job.assetScope, "carousel");
+    assert.deepEqual(carouselAndDetail.job.assetScopes, ["carousel", "detail"]);
+    assert.equal(carouselAndDetail.job.carouselImages.length, 6);
+    assert.equal(carouselAndDetail.job.detailImages.length, 6);
+    assert.equal(carouselAndDetail.job.video.storyboardTaskId, undefined);
+    assert.equal(createTaskBodies.length, 12);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKieApiKey === undefined) delete process.env.KIE_API_KEY;
+    else process.env.KIE_API_KEY = originalKieApiKey;
+    if (originalOpenRouterApiKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
+    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
+  }
+});
+
 async function sendKieSuccess(taskId: string, resultUrl: string) {
   const response = await receiveKieCallback(
     new Request("http://localhost:3000/api/kie/callback", {
@@ -268,6 +377,89 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
     const secondStatus = await secondStatusResponse.json();
     assert.equal(secondStatus.job.video.status, "success");
     assert.equal(secondStatus.job.video.resultUrl, "https://cdn.example.com/video-task.mp4");
+    assert.equal(secondStatus.job.status, "completed");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKieApiKey === undefined) delete process.env.KIE_API_KEY;
+    else process.env.KIE_API_KEY = originalKieApiKey;
+    if (originalOpenRouterApiKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
+    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
+  }
+});
+
+test("POST /api/ecommerce-assets/status advances a video-only job from storyboard callback", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKieApiKey = process.env.KIE_API_KEY;
+  const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
+  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  let createTaskCount = 0;
+  process.env.KIE_API_KEY = "test-kie-key";
+  process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "https://kieai.redpandaai.co/api/file-base64-upload") {
+      return new Response(
+        JSON.stringify({ success: true, data: { downloadUrl: "https://cdn.example.com/product.png" } }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (url === "https://openrouter.ai/api/v1/chat/completions") {
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(fallbackEcommerceBrief("en")) } }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (url === "https://api.kie.ai/api/v1/jobs/createTask") {
+      createTaskCount += 1;
+      const body = JSON.parse(String(init?.body));
+      const isVideo = body.model === "bytedance/seedance-2-fast";
+      return new Response(JSON.stringify({ code: 200, data: { taskId: isVideo ? "video-only-task" : `video-only-image-${createTaskCount}` } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+
+  try {
+    const createResponse = await createEcommerceAssets(
+      new Request("http://localhost:3000/api/ecommerce-assets/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ productPhotoDataUrls: ["data:image/png;base64,AA=="], textLanguage: "en", assetScope: "video" }),
+      })
+    );
+    const createPayload = await createResponse.json();
+    assert.equal(createPayload.job.carouselImages.length, 0);
+    assert.equal(createPayload.job.detailImages.length, 0);
+    await sendKieSuccess(createPayload.job.video.storyboardTaskId, "https://cdn.example.com/video-only-storyboard.png");
+
+    const firstStatusResponse = await refreshEcommerceAssetsStatus(
+      new Request("http://localhost:3000/api/ecommerce-assets/status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ job: createPayload.job }),
+      })
+    );
+    const firstStatus = await firstStatusResponse.json();
+    assert.equal(firstStatus.job.video.status, "processing");
+    assert.equal(firstStatus.job.video.taskId, "video-only-task");
+    assert.equal(firstStatus.job.status, "processing");
+
+    await sendKieSuccess("video-only-task", "https://cdn.example.com/video-only.mp4");
+    const secondStatusResponse = await refreshEcommerceAssetsStatus(
+      new Request("http://localhost:3000/api/ecommerce-assets/status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ job: firstStatus.job }),
+      })
+    );
+    const secondStatus = await secondStatusResponse.json();
+    assert.equal(secondStatus.job.video.status, "success");
     assert.equal(secondStatus.job.status, "completed");
   } finally {
     globalThis.fetch = originalFetch;

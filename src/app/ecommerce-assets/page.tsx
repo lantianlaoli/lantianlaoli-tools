@@ -36,6 +36,7 @@ import {
 } from "@/lib/ecommerce-requirement-phrases";
 import type {
   EcommerceAssetsJob,
+  EcommerceAssetScopeOption,
   EcommerceImageSlot,
   EcommerceProductPhotoSlot,
   EcommerceProductView,
@@ -85,6 +86,26 @@ function statusClass(status: EcommerceSlotStatus) {
 
 function completedCount(slots: Array<{ status: EcommerceSlotStatus }>) {
   return slots.filter((slot) => slot.status === "success" || slot.status === "fail").length;
+}
+
+function videoCompletedCount(job: EcommerceAssetsJob | null) {
+  return job?.video.status === "success" || job?.video.status === "fail" ? 1 : 0;
+}
+
+const ALL_GENERATION_TARGETS: EcommerceAssetScopeOption[] = ["carousel", "detail", "video"];
+
+function jobTargets(job: EcommerceAssetsJob | null) {
+  if (!job) return ALL_GENERATION_TARGETS;
+  return job.assetScopes?.length ? job.assetScopes : job.assetScope && job.assetScope !== "all" ? [job.assetScope] : ALL_GENERATION_TARGETS;
+}
+
+function generationCountLabel(job: EcommerceAssetsJob | null, kind: "carousel" | "detail" | "video") {
+  if (!job) return kind === "video" ? "0/1" : "0/6";
+  const targets = jobTargets(job);
+  if (!targets.includes(kind)) return "未生成";
+  if (kind === "carousel") return job.carouselImages.length ? `${completedCount(job.carouselImages)}/${job.carouselImages.length}` : "未生成";
+  if (kind === "detail") return job.detailImages.length ? `${completedCount(job.detailImages)}/${job.detailImages.length}` : "未生成";
+  return `${videoCompletedCount(job)}/1`;
 }
 
 function imageDownloadUrl(url: string, name: string) {
@@ -356,6 +377,7 @@ export default function EcommerceAssetsPage() {
   const [imageAspectRatio, setImageAspectRatio] = useState<KieAspectRatio>("1:1");
   const [videoAspectRatio, setVideoAspectRatio] = useState<KieAspectRatio>("1:1");
   const [videoResolution, setVideoResolution] = useState<VideoResolution>("480p");
+  const [generationTargets, setGenerationTargets] = useState<EcommerceAssetScopeOption[]>(ALL_GENERATION_TARGETS);
   const [job, setJob] = useState<EcommerceAssetsJob | null>(null);
   const jobRef = useRef<EcommerceAssetsJob | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -386,6 +408,7 @@ export default function EcommerceAssetsPage() {
   const frontPhoto = productPhotos.find((p) => p.view === "front")!;
   const hasFront = Boolean(frontPhoto.dataUrl);
   const uploadedCount = productPhotos.filter((p) => p.dataUrl).length;
+  const canStartGeneration = hasFront && !isBusy && generationTargets.length > 0;
 
   const readImageFile = useCallback(async (file: File) => {
     if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
@@ -451,6 +474,13 @@ export default function EcommerceAssetsPage() {
     }
   }
 
+  function toggleGenerationTarget(target: EcommerceAssetScopeOption) {
+    if (isBusy) return;
+    setGenerationTargets((current) =>
+      current.includes(target) ? current.filter((item) => item !== target) : ALL_GENERATION_TARGETS.filter((item) => item === target || current.includes(item))
+    );
+  }
+
   async function startGeneration() {
     if (!hasFront) {
       setError("请至少上传正视图产品照片。");
@@ -476,6 +506,7 @@ export default function EcommerceAssetsPage() {
           imageAspectRatio,
           videoAspectRatio,
           videoResolution,
+          assetScopes: generationTargets,
         }),
       });
       const payload = await response.json();
@@ -718,15 +749,15 @@ export default function EcommerceAssetsPage() {
                 <p className="mt-1">产品照片</p>
               </div>
               <div className="rounded-lg border border-emerald-300/10 bg-white/[0.03] p-3">
-                <p className="font-mono text-lg text-zinc-100">{completedCount(job?.carouselImages ?? [])}/6</p>
+                <p className="font-mono text-lg text-zinc-100">{generationCountLabel(job, "carousel")}</p>
                 <p className="mt-1">轮播图</p>
               </div>
               <div className="rounded-lg border border-emerald-300/10 bg-white/[0.03] p-3">
-                <p className="font-mono text-lg text-zinc-100">{completedCount(job?.detailImages ?? [])}/6</p>
+                <p className="font-mono text-lg text-zinc-100">{generationCountLabel(job, "detail")}</p>
                 <p className="mt-1">详情图</p>
               </div>
               <div className="rounded-lg border border-emerald-300/10 bg-white/[0.03] p-3">
-                <p className="font-mono text-lg text-zinc-100">{job?.video.status === "success" ? "1/1" : "0/1"}</p>
+                <p className="font-mono text-lg text-zinc-100">{generationCountLabel(job, "video")}</p>
                 <p className="mt-1">广告视频</p>
               </div>
             </div>
@@ -1014,11 +1045,43 @@ export default function EcommerceAssetsPage() {
               </SettingsGroup>
             </div>
 
+            <div className="mt-5 rounded-lg border border-emerald-300/10 bg-black/20 p-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-zinc-300">生成范围</p>
+                <span className="text-[11px] text-zinc-500">{generationTargets.length ? `已选择 ${generationTargets.length} 项` : "至少开启 1 项"}</span>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { scope: "carousel" as const, label: "轮播图" },
+                  { scope: "detail" as const, label: "详情图" },
+                  { scope: "video" as const, label: "视频" },
+                ].map((item) => {
+                  const active = generationTargets.includes(item.scope);
+                  return (
+                    <button
+                      key={item.scope}
+                      type="button"
+                      role="switch"
+                      aria-checked={active}
+                      disabled={isBusy}
+                      onClick={() => toggleGenerationTarget(item.scope)}
+                      className="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-zinc-100 transition hover:border-emerald-300/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span>{item.label}</span>
+                      <span className={`flex h-6 w-11 items-center rounded-full p-0.5 transition ${active ? "bg-lime-300" : "bg-zinc-700"}`}>
+                        <span className={`h-5 w-5 rounded-full bg-zinc-950 shadow transition ${active ? "translate-x-5" : "translate-x-0"}`} />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <button
               type="button"
-              disabled={!hasFront || isBusy}
+              disabled={!canStartGeneration}
               onClick={() => startGeneration()}
-              className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-md bg-lime-300 text-sm font-semibold text-zinc-950 transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-md bg-lime-300 text-sm font-semibold text-zinc-950 transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
             >
               {isBusy ? <Loader2 size={17} aria-hidden="true" className="animate-spin" /> : <Sparkles size={17} aria-hidden="true" />}
               一键生成
@@ -1044,7 +1107,7 @@ export default function EcommerceAssetsPage() {
               title="轮播图"
               subtitle="展示产品的 6 个核心视角"
               complete={completedCount(job?.carouselImages ?? [])}
-              total={6}
+              total={job?.carouselImages.length || 6}
             >
               <div className="grid gap-4 md:grid-cols-3">
                 {(job?.carouselImages ?? []).length ? (
@@ -1059,7 +1122,7 @@ export default function EcommerceAssetsPage() {
                     />
                   ))
                 ) : (
-                  <EmptySlots count={6} label="等待生成" aspectRatio={imageAspectRatio} />
+                  <EmptySlots count={6} label={job ? "本次未生成" : "等待生成"} aspectRatio={imageAspectRatio} />
                 )}
               </div>
             </SectionShell>
@@ -1068,7 +1131,7 @@ export default function EcommerceAssetsPage() {
               title="详情图"
               subtitle="围绕卖点、场景和信任感的 6 张详情图"
               complete={completedCount(job?.detailImages ?? [])}
-              total={6}
+              total={job?.detailImages.length || 6}
             >
               <div className="grid gap-4 md:grid-cols-3">
                 {(job?.detailImages ?? []).length ? (
@@ -1083,19 +1146,23 @@ export default function EcommerceAssetsPage() {
                     />
                   ))
                 ) : (
-                  <EmptySlots count={6} label="等待生成" aspectRatio={imageAspectRatio} />
+                  <EmptySlots count={6} label={job ? "本次未生成" : "等待生成"} aspectRatio={imageAspectRatio} />
                 )}
               </div>
             </SectionShell>
 
-            <SectionShell title="广告视频" subtitle="产品展示广告短片" complete={job?.video.status === "success" || job?.video.status === "fail" ? 1 : 0} total={1}>
+            <SectionShell title="广告视频" subtitle="产品展示广告短片" complete={videoCompletedCount(job)} total={job && !jobTargets(job).includes("video") ? 0 : 1}>
               <div className="grid gap-4 md:grid-cols-[minmax(0,360px)_1fr]">
                 <div className="rounded-lg border border-white/10 bg-black/20 p-3">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold text-zinc-100">{videoAspectRatio} 广告短片</h3>
                     <SlotBadge status={videoPresentation.status} label={videoPresentation.badgeLabel} />
                   </div>
-                  {job?.video.resultUrl ? (
+                  {job && !jobTargets(job).includes("video") ? (
+                    <div className={`flex ${ASPECT_CLASS[videoAspectRatio]} items-center justify-center rounded-md border border-dashed border-white/10 bg-white/[0.03] p-4 text-center text-xs leading-5 text-zinc-500`}>
+                      本次未生成
+                    </div>
+                  ) : job?.video.resultUrl ? (
                     <>
                       <video src={job.video.resultUrl} controls className={`${ASPECT_CLASS[videoAspectRatio]} w-full rounded-md border border-white/10 bg-black object-cover transition-[aspect-ratio] duration-500 ease-out`} />
                       <a

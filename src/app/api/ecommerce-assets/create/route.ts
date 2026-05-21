@@ -15,6 +15,8 @@ export async function POST(request: Request) {
       imageAspectRatio?: string;
       videoAspectRatio?: string;
       videoResolution?: string;
+      assetScope?: unknown;
+      assetScopes?: unknown;
     };
 
     const productPhotoDataUrls = body.productPhotoDataUrls && body.productPhotoDataUrls.length > 0
@@ -36,6 +38,8 @@ export async function POST(request: Request) {
       imageAspectRatio: body.imageAspectRatio,
       videoAspectRatio: body.videoAspectRatio,
       videoResolution: body.videoResolution,
+      assetScope: body.assetScope,
+      assetScopes: body.assetScopes,
     });
 
     return NextResponse.json({ success: true, jobId: job.id, job }, { status: 202 });

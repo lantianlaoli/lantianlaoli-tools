@@ -68,6 +68,8 @@ export type TextBlock = {
 export type EcommerceTextLanguage = "en" | "zh";
 
 export type EcommerceAssetKind = "carousel" | "detail" | "videoStoryboard" | "video";
+export type EcommerceAssetScope = "all" | "carousel" | "detail" | "video";
+export type EcommerceAssetScopeOption = Exclude<EcommerceAssetScope, "all">;
 
 export type EcommerceSlotStatus = "waiting" | "processing" | "success" | "fail";
 
@@ -116,6 +118,8 @@ export type EcommerceVideoSlot = {
 export type EcommerceAssetsJob = {
   id: string;
   status: "preparing" | "processing" | "completed" | "failed";
+  assetScope?: EcommerceAssetScope;
+  assetScopes?: EcommerceAssetScopeOption[];
   textLanguage: EcommerceTextLanguage;
   imageResolution?: string;
   imageAspectRatio?: string;
