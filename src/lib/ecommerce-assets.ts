@@ -74,7 +74,7 @@ export async function analyzeProductForEcommerceAssets(
   customRequirements?: string
 ): Promise<EcommerceCreativeBrief> {
   const viewLabels = ["front view", "side view", "back view"];
-  const imageContent = productImageUrls.map((url, i) => ({
+  const imageContent = productImageUrls.map((url) => ({
     type: "image_url" as const,
     image_url: { url },
   }));

@@ -95,7 +95,7 @@ export async function POST(request: Request) {
         resolution: row.resolution,
         callBackUrl,
       });
-      setStoredJobStatus({
+      await setStoredJobStatus({
         taskId,
         status: "waiting",
         updatedAt: new Date().toISOString(),

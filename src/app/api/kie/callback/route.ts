@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const payload = await request.json();
     const normalized = normalizeKieRecordInfo(payload);
     if (!normalized.taskId) {
-      return NextResponse.json({ error: "Webhook payload did not include data.taskId." }, { status: 400 });
+      return NextResponse.json({ error: "Callback payload did not include data.taskId." }, { status: 400 });
     }
 
     await setStoredJobStatus({
@@ -24,9 +24,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[generate/webhook]", error);
+    console.error("[kie/callback]", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to process webhook." },
+      { error: error instanceof Error ? error.message : "Failed to process KIE callback." },
       { status: 500 }
     );
   }

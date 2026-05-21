@@ -155,7 +155,7 @@ export async function createKieSeedanceVideoTask(input: {
 
 export function getKieCallbackUrl() {
   const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || "").trim().replace(/\/+$/, "");
-  return baseUrl ? `${baseUrl}/api/generate/webhook` : undefined;
+  return baseUrl ? `${baseUrl}/api/kie/callback` : undefined;
 }
 
 export function normalizeKieRecordInfo(payload: KieRecordInfo) {

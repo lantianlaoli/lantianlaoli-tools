@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { POST as createEcommerceAssets } from "../src/app/api/ecommerce-assets/create/route";
+import { POST as receiveKieCallback } from "../src/app/api/kie/callback/route";
+import { POST as retryEcommerceAsset } from "../src/app/api/ecommerce-assets/retry/route";
 import { POST as refreshEcommerceAssetsStatus } from "../src/app/api/ecommerce-assets/status/route";
 import { getEcommerceVideoPresentation } from "../src/lib/ecommerce-assets-presentation";
 import {
@@ -91,9 +93,11 @@ test("POST /api/ecommerce-assets/create uploads the photo and starts image tasks
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
   const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
-  const createTaskBodies: Array<{ model: string; input: Record<string, unknown> }> = [];
+  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const createTaskBodies: Array<{ model: string; callBackUrl?: string; input: Record<string, unknown> }> = [];
   process.env.KIE_API_KEY = "test-kie-key";
   process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
 
   globalThis.fetch = async (input, init) => {
     const url = String(input);
@@ -153,6 +157,7 @@ test("POST /api/ecommerce-assets/create uploads the photo and starts image tasks
     assert.equal(createTaskBodies.length, 13);
     assert.equal(createTaskBodies.filter((body) => body.model === "gpt-image-2-image-to-image").length, 13);
     assert.equal(createTaskBodies.every((body) => body.input.aspect_ratio === "1:1"), true);
+    assert.equal(createTaskBodies.every((body) => body.callBackUrl === "https://rivora.example.com/api/kie/callback"), true);
     assert.equal(payload.job.carouselImages[0].taskId, "task-1");
     assert.equal(payload.job.video.storyboardTaskId, "task-13");
   } finally {
@@ -161,16 +166,39 @@ test("POST /api/ecommerce-assets/create uploads the photo and starts image tasks
     else process.env.KIE_API_KEY = originalKieApiKey;
     if (originalOpenRouterApiKey === undefined) delete process.env.OPENROUTER_API_KEY;
     else process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
+    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   }
 });
 
-test("POST /api/ecommerce-assets/status advances successful image and video tasks", async () => {
+async function sendKieSuccess(taskId: string, resultUrl: string) {
+  const response = await receiveKieCallback(
+    new Request("http://localhost:3000/api/kie/callback", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        code: 200,
+        data: {
+          taskId,
+          state: "success",
+          resultJson: JSON.stringify({ resultUrls: [resultUrl] }),
+        },
+      }),
+    })
+  );
+  assert.equal(response.status, 200);
+}
+
+test("POST /api/ecommerce-assets/status advances successful image and video tasks from KIE callbacks", async () => {
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
   const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
+  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   let createTaskCount = 0;
+  const createTaskBodies: Array<{ model: string; callBackUrl?: string }> = [];
   process.env.KIE_API_KEY = "test-kie-key";
   process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
 
   globalThis.fetch = async (input, init) => {
     const url = String(input);
@@ -189,25 +217,12 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
     if (url === "https://api.kie.ai/api/v1/jobs/createTask") {
       createTaskCount += 1;
       const body = JSON.parse(String(init?.body));
+      createTaskBodies.push(body);
       const isVideo = body.model === "bytedance/seedance-2-fast";
       return new Response(JSON.stringify({ code: 200, data: { taskId: isVideo ? "video-task" : `image-task-${createTaskCount}` } }), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
-    }
-    if (url.startsWith("https://api.kie.ai/api/v1/jobs/recordInfo")) {
-      const taskId = new URL(url).searchParams.get("taskId");
-      return new Response(
-        JSON.stringify({
-          code: 200,
-          data: {
-            taskId,
-            state: "success",
-            resultJson: JSON.stringify({ resultUrls: [`https://cdn.example.com/${taskId}.mp4`] }),
-          },
-        }),
-        { status: 200, headers: { "content-type": "application/json" } }
-      );
     }
     throw new Error(`Unexpected fetch: ${url}`);
   };
@@ -221,6 +236,10 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
       })
     );
     const createPayload = await createResponse.json();
+    for (const slot of [...createPayload.job.carouselImages, ...createPayload.job.detailImages]) {
+      await sendKieSuccess(slot.taskId, `https://cdn.example.com/${slot.taskId}.png`);
+    }
+    await sendKieSuccess(createPayload.job.video.storyboardTaskId, "https://cdn.example.com/storyboard.png");
 
     const firstStatusResponse = await refreshEcommerceAssetsStatus(
       new Request("http://localhost:3000/api/ecommerce-assets/status", {
@@ -234,7 +253,10 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
     assert.equal(firstStatus.job.carouselImages.every((slot: { status: string }) => slot.status === "success"), true);
     assert.equal(firstStatus.job.detailImages.every((slot: { status: string }) => slot.status === "success"), true);
     assert.equal(firstStatus.job.video.status, "processing");
-    assert.equal(firstStatus.job.video.storyboardUrl, "https://cdn.example.com/image-task-13.mp4");
+    assert.equal(firstStatus.job.video.storyboardUrl, "https://cdn.example.com/storyboard.png");
+    assert.equal(createTaskBodies.at(-1)?.model, "bytedance/seedance-2-fast");
+    assert.equal(createTaskBodies.at(-1)?.callBackUrl, "https://rivora.example.com/api/kie/callback");
+    await sendKieSuccess("video-task", "https://cdn.example.com/video-task.mp4");
 
     const secondStatusResponse = await refreshEcommerceAssetsStatus(
       new Request("http://localhost:3000/api/ecommerce-assets/status", {
@@ -253,5 +275,73 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
     else process.env.KIE_API_KEY = originalKieApiKey;
     if (originalOpenRouterApiKey === undefined) delete process.env.OPENROUTER_API_KEY;
     else process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
+    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
+  }
+});
+
+test("POST /api/ecommerce-assets/retry recreates a failed image task with callback", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKieApiKey = process.env.KIE_API_KEY;
+  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  let createTaskBody: { callBackUrl?: string; input?: Record<string, unknown> } | undefined;
+  process.env.KIE_API_KEY = "test-kie-key";
+  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "https://api.kie.ai/api/v1/jobs/createTask") {
+      createTaskBody = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ code: 200, data: { taskId: "retry-task" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+
+  try {
+    const job = {
+      id: "job-1",
+      status: "failed",
+      textLanguage: "zh",
+      imageAspectRatio: "1:1",
+      imageResolution: "1K",
+      productImageUrls: ["https://cdn.example.com/product.png"],
+      carouselImages: [
+        {
+          id: "carousel-1",
+          kind: "carousel",
+          index: 1,
+          title: "Main",
+          taskId: "old-task",
+          status: "fail",
+          error: "Sorry, but the image we created may violate OpenAI's content policies.",
+          prompt: "Retry this product image.",
+        },
+      ],
+      detailImages: [],
+      video: { status: "waiting", prompt: "" },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    const response = await retryEcommerceAsset(
+      new Request("http://localhost:3000/api/ecommerce-assets/retry", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ job, slotId: "carousel-1" }),
+      })
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { taskId: "retry-task" });
+    assert.equal(createTaskBody?.callBackUrl, "https://rivora.example.com/api/kie/callback");
+    assert.deepEqual(createTaskBody?.input?.input_urls, ["https://cdn.example.com/product.png"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKieApiKey === undefined) delete process.env.KIE_API_KEY;
+    else process.env.KIE_API_KEY = originalKieApiKey;
+    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   }
 });

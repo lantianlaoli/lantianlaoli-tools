@@ -12,9 +12,10 @@ import { normalizeEcommerceTextLanguage } from "./ecommerce-language";
 import {
   createKieImageTask,
   createKieSeedanceVideoTask,
-  getKieTaskStatus,
+  getKieCallbackUrl,
   uploadKieImage,
 } from "./kie";
+import { getStoredJobStatus } from "./job-store";
 import type {
   EcommerceAssetsJob,
   EcommerceCreativeBrief,
@@ -47,6 +48,7 @@ async function createImageSlots(input: {
 }) {
   const promptSlots = buildEcommerceImagePrompts(input.brief, input.textLanguage, input.productImageUrls.length);
   const slots: EcommerceImageSlot[] = [];
+  const callBackUrl = getKieCallbackUrl();
 
   for (const promptSlot of promptSlots) {
     const taskId = await createKieImageTask({
@@ -54,6 +56,7 @@ async function createImageSlots(input: {
       inputUrls: input.productImageUrls,
       aspectRatio: input.imageAspectRatio,
       resolution: input.imageResolution,
+      callBackUrl,
     });
     slots.push({
       id: `${promptSlot.kind}-${promptSlot.index}`,
@@ -135,6 +138,7 @@ export async function createEcommerceAssetsJob(input: {
       inputUrls: productImageUrls,
       aspectRatio: videoAspectRatio,
       resolution: imageResolution,
+      callBackUrl: getKieCallbackUrl(),
     });
 
     job = {
@@ -155,14 +159,14 @@ export async function createEcommerceAssetsJob(input: {
     };
     return job;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create ecommerce assets job.";
     throw error;
   }
 }
 
 async function refreshImageSlot(slot: EcommerceImageSlot): Promise<EcommerceImageSlot> {
   if (isTerminal(slot.status) || !slot.taskId) return slot;
-  const status = await getKieTaskStatus(slot.taskId);
+  const status = await getStoredJobStatus(slot.taskId);
+  if (!status) return slot;
   if (status.status === "success") {
     return { ...slot, status: "success", resultUrl: status.resultUrl };
   }
@@ -178,12 +182,12 @@ export async function refreshEcommerceAssetsJob(currentJob: EcommerceAssetsJob):
   let video = { ...currentJob.video };
 
   if (video.storyboardTaskId && !video.storyboardUrl && video.status !== "fail") {
-    const storyboardStatus = await getKieTaskStatus(video.storyboardTaskId);
-    if (storyboardStatus.status === "success" && storyboardStatus.resultUrl) {
+    const storyboardStatus = await getStoredJobStatus(video.storyboardTaskId);
+    if (storyboardStatus?.status === "success" && storyboardStatus.resultUrl) {
       video = { ...video, storyboardUrl: storyboardStatus.resultUrl, status: "processing" };
-    } else if (storyboardStatus.status === "fail") {
+    } else if (storyboardStatus?.status === "fail") {
       video = { ...video, status: "fail", error: storyboardStatus.error || "Storyboard generation failed." };
-    } else {
+    } else if (storyboardStatus) {
       video = { ...video, status: storyboardStatus.status };
     }
   }
@@ -207,10 +211,21 @@ export async function refreshEcommerceAssetsJob(currentJob: EcommerceAssetsJob):
       aspectRatio: videoAspect,
       resolution: videoRes,
       duration: 15,
+      callBackUrl: getKieCallbackUrl(),
     });
     video = { ...video, taskId, status: "processing" };
   } else if (video.taskId && !isTerminal(video.status)) {
-    const videoStatus = await getKieTaskStatus(video.taskId);
+    const videoStatus = await getStoredJobStatus(video.taskId);
+    if (!videoStatus) {
+      const updated = {
+        ...currentJob,
+        carouselImages,
+        detailImages,
+        video,
+        updatedAt: Date.now(),
+      };
+      return { ...updated, status: overallStatus(updated) };
+    }
     if (videoStatus.status === "success" && videoStatus.resultUrl) {
       video = { ...video, status: "success", resultUrl: videoStatus.resultUrl };
     } else if (videoStatus.status === "fail") {

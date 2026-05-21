@@ -113,7 +113,19 @@ const ASPECT_CLASS: Record<KieAspectRatio, string> = {
   auto: "aspect-square",
 };
 
-function AssetCard({ slot, onEdit, aspectRatio }: { slot: EcommerceImageSlot; onEdit?: (slot: EcommerceImageSlot) => void; aspectRatio?: KieAspectRatio }) {
+function AssetCard({
+  slot,
+  onEdit,
+  onRetry,
+  isRetrying,
+  aspectRatio,
+}: {
+  slot: EcommerceImageSlot;
+  onEdit?: (slot: EcommerceImageSlot) => void;
+  onRetry?: (slot: EcommerceImageSlot) => void;
+  isRetrying?: boolean;
+  aspectRatio?: KieAspectRatio;
+}) {
   const aClass = ASPECT_CLASS[aspectRatio ?? "1:1"];
   return (
     <article className="rounded-lg border border-emerald-300/10 bg-[#090d0b] p-3 shadow-[0_12px_40px_rgba(0,0,0,0.24)]">
@@ -153,9 +165,25 @@ function AssetCard({ slot, onEdit, aspectRatio }: { slot: EcommerceImageSlot; on
           </div>
         </>
       ) : slot.status === "fail" ? (
-        <div className={`flex ${aClass} items-center justify-center rounded-md border border-dashed border-red-500/30 bg-red-500/10 p-4 text-center text-xs leading-5 text-red-100`}>
-          {slot.error || "生成失败"}
-        </div>
+        <>
+          <div className={`flex ${aClass} items-center justify-center rounded-md border border-dashed border-red-500/30 bg-red-500/10 p-4 text-center text-xs leading-5 text-red-100`}>
+            {slot.error || "生成失败"}
+          </div>
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={() => onRetry(slot)}
+              disabled={isRetrying}
+              className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-md border border-red-300/20 bg-red-500/[0.08] text-xs font-semibold text-red-50 transition hover:border-red-300/40 hover:bg-red-500/[0.14] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isRetrying ? (
+                <><Loader2 size={15} aria-hidden="true" className="animate-spin" /> Retrying</>
+              ) : (
+                <><RefreshCw size={15} aria-hidden="true" /> Retry</>
+              )}
+            </button>
+          ) : null}
+        </>
       ) : (
         <div className={`result-wave flex ${aClass} items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-xs text-zinc-400`}>
           <div className="relative z-10 flex flex-col items-center gap-2">
@@ -336,6 +364,7 @@ export default function EcommerceAssetsPage() {
   const [regenerateImages, setRegenerateImages] = useState<LocalReferenceImage[]>([]);
   const [regenerateError, setRegenerateError] = useState("");
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [retryingSlotId, setRetryingSlotId] = useState<string | null>(null);
   const frontInputRef = useRef<HTMLInputElement | null>(null);
   const sideInputRef = useRef<HTMLInputElement | null>(null);
   const backInputRef = useRef<HTMLInputElement | null>(null);
@@ -591,6 +620,43 @@ export default function EcommerceAssetsPage() {
       setRegenerateError(e instanceof Error ? e.message : "重新生成失败");
     } finally {
       setIsRegenerating(false);
+    }
+  }
+
+  async function retryImageSlot(slot: EcommerceImageSlot) {
+    if (!job || retryingSlotId) return;
+    setRetryingSlotId(slot.id);
+    setError(null);
+    try {
+      const response = await fetch("/api/ecommerce-assets/retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job, slotId: slot.id }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Retry failed.");
+      const newTaskId = payload.taskId as string;
+      setJob((prev) => {
+        if (!prev) return prev;
+        const updateSlots = (slots: EcommerceImageSlot[]) =>
+          slots.map((candidate) =>
+            candidate.id === slot.id
+              ? { ...candidate, taskId: newTaskId, status: "waiting" as EcommerceSlotStatus, resultUrl: undefined, error: undefined }
+              : candidate
+          );
+        return {
+          ...prev,
+          status: "processing",
+          carouselImages: updateSlots(prev.carouselImages),
+          detailImages: updateSlots(prev.detailImages),
+          updatedAt: Date.now(),
+        };
+      });
+      if (status !== "polling") setStatus("polling");
+    } catch (retryError) {
+      setError(retryError instanceof Error ? retryError.message : "Retry failed.");
+    } finally {
+      setRetryingSlotId(null);
     }
   }
 
@@ -982,7 +1048,16 @@ export default function EcommerceAssetsPage() {
             >
               <div className="grid gap-4 md:grid-cols-3">
                 {(job?.carouselImages ?? []).length ? (
-                  job?.carouselImages.map((slot) => <AssetCard key={slot.id} slot={slot} onEdit={openRegenerateModal} aspectRatio={imageAspectRatio} />)
+                  job?.carouselImages.map((slot) => (
+                    <AssetCard
+                      key={slot.id}
+                      slot={slot}
+                      onEdit={openRegenerateModal}
+                      onRetry={retryImageSlot}
+                      isRetrying={retryingSlotId === slot.id}
+                      aspectRatio={imageAspectRatio}
+                    />
+                  ))
                 ) : (
                   <EmptySlots count={6} label="等待生成" aspectRatio={imageAspectRatio} />
                 )}
@@ -997,7 +1072,16 @@ export default function EcommerceAssetsPage() {
             >
               <div className="grid gap-4 md:grid-cols-3">
                 {(job?.detailImages ?? []).length ? (
-                  job?.detailImages.map((slot) => <AssetCard key={slot.id} slot={slot} onEdit={openRegenerateModal} aspectRatio={imageAspectRatio} />)
+                  job?.detailImages.map((slot) => (
+                    <AssetCard
+                      key={slot.id}
+                      slot={slot}
+                      onEdit={openRegenerateModal}
+                      onRetry={retryImageSlot}
+                      isRetrying={retryingSlotId === slot.id}
+                      aspectRatio={imageAspectRatio}
+                    />
+                  ))
                 ) : (
                   <EmptySlots count={6} label="等待生成" aspectRatio={imageAspectRatio} />
                 )}

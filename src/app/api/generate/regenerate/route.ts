@@ -118,7 +118,7 @@ export async function POST(request: Request) {
       callBackUrl: getKieCallbackUrl(),
     });
 
-    setStoredJobStatus({
+    await setStoredJobStatus({
       taskId,
       status: "waiting",
       updatedAt: new Date().toISOString(),

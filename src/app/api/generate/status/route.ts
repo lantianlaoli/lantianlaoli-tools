@@ -11,13 +11,13 @@ export async function GET(request: Request) {
     if (!taskId) {
       return NextResponse.json({ error: "taskId is required." }, { status: 400 });
     }
-    const webhookStatus = getStoredJobStatus(taskId);
+    const webhookStatus = await getStoredJobStatus(taskId);
     if (webhookStatus?.source === "webhook") {
       return NextResponse.json(webhookStatus);
     }
 
     const status = await getKieImageStatus(taskId);
-    setStoredJobStatus({
+    await setStoredJobStatus({
       taskId,
       status: status.status,
       resultUrl: status.resultUrl,
