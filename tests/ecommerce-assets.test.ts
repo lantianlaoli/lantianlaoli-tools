@@ -43,6 +43,28 @@ test("first carousel prompt enforces a clean white background main image", () =>
   assert.match(firstCarousel.prompt, /no headline/i);
 });
 
+test("blank custom requirements add default no-extra-text guidance to carousel only", () => {
+  const prompts = buildEcommerceImagePrompts(fallbackEcommerceBrief("zh"), "zh");
+  const carouselPrompts = prompts.filter((slot) => slot.kind === "carousel");
+  const detailPrompts = prompts.filter((slot) => slot.kind === "detail");
+  const defaultGuidance = "默认生成要求：轮播图不要出现产品本身之外的修饰性文字、说明性文字、参数文字、引导文字、箭头或标签。";
+
+  assert.equal(carouselPrompts.every((slot) => slot.prompt.includes(defaultGuidance)), true);
+  assert.equal(detailPrompts.every((slot) => slot.prompt.includes(defaultGuidance)), false);
+});
+
+test("custom requirements replace the default carousel no-extra-text guidance", () => {
+  const brief = {
+    ...fallbackEcommerceBrief("zh"),
+    customRequirements: "轮播图允许短文案，详情图保留参数说明。",
+  };
+  const prompts = buildEcommerceImagePrompts(brief, "zh");
+  const defaultGuidance = "默认生成要求：轮播图不要出现产品本身之外的修饰性文字、说明性文字、参数文字、引导文字、箭头或标签。";
+
+  assert.equal(prompts.every((slot) => !slot.prompt.includes(defaultGuidance)), true);
+  assert.equal(prompts.every((slot) => slot.prompt.includes("轮播图允许短文案，详情图保留参数说明。")), true);
+});
+
 test("ecommerce video presentation shows an unstarted empty state before a job exists", () => {
   const presentation = getEcommerceVideoPresentation(null);
 

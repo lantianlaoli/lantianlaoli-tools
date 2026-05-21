@@ -122,6 +122,11 @@ function customRequirementsBlock(customRequirements?: string) {
   return `\nUser custom requirements (MUST follow): ${customRequirements.trim()}`;
 }
 
+function defaultCarouselRequirementsBlock(customRequirements?: string) {
+  if (customRequirements?.trim()) return "";
+  return "默认生成要求：轮播图不要出现产品本身之外的修饰性文字、说明性文字、参数文字、引导文字、箭头或标签。";
+}
+
 function baseImagePrompt(brief: EcommerceCreativeBrief, textLanguage: EcommerceTextLanguage, numViews = 1) {
   return [
     `Create one finished ecommerce product image using the uploaded product photo${numViews > 1 ? "s" : ""} as the identity reference.`,
@@ -154,10 +159,11 @@ export function buildEcommerceImagePrompts(
       title: textLanguage === "zh" ? "白底主图" : "White Background",
       prompt: [
         base,
+        defaultCarouselRequirementsBlock(brief.customRequirements),
         "Image role: carousel image 1.",
         "Use a pure white background, centered product, realistic soft shadow, accurate product scale, marketplace-ready composition.",
         "No headline, no decorative scene, no lifestyle background, and no large text.",
-      ].join("\n"),
+      ].filter(Boolean).join("\n"),
     },
     {
       kind: "carousel",
@@ -165,9 +171,10 @@ export function buildEcommerceImagePrompts(
       title: textLanguage === "zh" ? "卖点展示" : "Hero Benefit",
       prompt: [
         base,
+        defaultCarouselRequirementsBlock(brief.customRequirements),
         `Carousel direction: ${brief.carouselDirection}.`,
         "Image role: carousel image 2. Create a premium hero composition that introduces the strongest selling point with very short text.",
-      ].join("\n"),
+      ].filter(Boolean).join("\n"),
     },
     {
       kind: "carousel",
@@ -175,9 +182,10 @@ export function buildEcommerceImagePrompts(
       title: textLanguage === "zh" ? "使用场景" : "Lifestyle Scene",
       prompt: [
         base,
+        defaultCarouselRequirementsBlock(brief.customRequirements),
         `Carousel direction: ${brief.carouselDirection}.`,
         "Image role: carousel image 3. Show the product in a clean use-context or studio scene that matches the same design system.",
-      ].join("\n"),
+      ].filter(Boolean).join("\n"),
     },
     {
       kind: "carousel",
@@ -185,9 +193,10 @@ export function buildEcommerceImagePrompts(
       title: textLanguage === "zh" ? "材质细节" : "Material Close-up",
       prompt: [
         base,
+        defaultCarouselRequirementsBlock(brief.customRequirements),
         `Carousel direction: ${brief.carouselDirection}.`,
         "Image role: carousel image 4. Use macro or close-up composition to showcase material quality, texture, craftsmanship, or fine details of the product.",
-      ].join("\n"),
+      ].filter(Boolean).join("\n"),
     },
     {
       kind: "carousel",
@@ -195,9 +204,10 @@ export function buildEcommerceImagePrompts(
       title: textLanguage === "zh" ? "功能演示" : "Feature in Action",
       prompt: [
         base,
+        defaultCarouselRequirementsBlock(brief.customRequirements),
         `Carousel direction: ${brief.carouselDirection}.`,
         "Image role: carousel image 5. Show the product being used or in action — convey functionality, movement, or dynamic energy while keeping the composition premium and clean.",
-      ].join("\n"),
+      ].filter(Boolean).join("\n"),
     },
     {
       kind: "carousel",
@@ -205,9 +215,10 @@ export function buildEcommerceImagePrompts(
       title: textLanguage === "zh" ? "核心优势" : "Key Differentiator",
       prompt: [
         base,
+        defaultCarouselRequirementsBlock(brief.customRequirements),
         `Carousel direction: ${brief.carouselDirection}.`,
         "Image role: carousel image 6. Highlight the product's unique advantage or differentiator — what sets it apart from competitors. Use comparison cues, before/after hints, or a bold visual statement.",
-      ].join("\n"),
+      ].filter(Boolean).join("\n"),
     },
     {
       kind: "detail",
