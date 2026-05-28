@@ -1,0 +1,7 @@
+interface:
+  display_name: "Rivora Tool Creator"
+  short_description: "Add Rivora mini tools consistently"
+  default_prompt: "Use $rivora-tool-creator to add a new Rivora mini tool that matches the existing project workflow."
+
+policy:
+  allow_implicit_invocation: true
