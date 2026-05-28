@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Images, Layers3, Sparkles, Video } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Building2, Images, Layers3, Sparkles, Video } from "lucide-react";
+import { useSyncExternalStore } from "react";
 import {
   ECOMMERCE_LANGUAGE_STORAGE_KEY,
   normalizeEcommerceTextLanguage,
@@ -27,6 +27,14 @@ const features = {
       meta: "Image2 · Seedance 2 Fast · 多比例",
       action: "打开工作台",
     },
+    {
+      href: "/expo-company-atlas",
+      title: "展会企业图鉴",
+      description: "上传传单、产品册和现场照片，按企业整理资料、生成展示图和 Notion-ready Markdown。",
+      icon: Building2,
+      meta: "OpenRouter · Image2 · Markdown",
+      action: "打开工作台",
+    },
   ],
   en: [
     {
@@ -45,6 +53,14 @@ const features = {
       meta: "Image2 · Seedance 2 Fast · Multi-ratio",
       action: "Open workspace",
     },
+    {
+      href: "/expo-company-atlas",
+      title: "Expo Company Atlas",
+      description: "Organize expo brochures and photos by company, then generate visual cards and Notion-ready Markdown.",
+      icon: Building2,
+      meta: "OpenRouter · Image2 · Markdown",
+      action: "Open workspace",
+    },
   ],
 } satisfies Record<EcommerceTextLanguage, Array<{
   href: string;
@@ -57,23 +73,23 @@ const features = {
 
 const copy = {
   zh: {
-    utility: "电商创意工具",
-    eyebrow: "产品素材生成",
+    utility: "AI 视觉工作台",
+    eyebrow: "素材与资料生成",
     title: "选择一个生成工作台",
-    body: "保留原有批量克隆照片流程，同时新增面向电商商品图和广告视频的一键生成入口。",
+    body: "从批量图片生成、电商素材到展会企业资料整理，选择适合当前任务的 AI 工作台。",
     languageLabel: "项目语言",
   },
   en: {
-    utility: "Commerce creative tools",
-    eyebrow: "Product media generation",
+    utility: "AI visual workspaces",
+    eyebrow: "Media and knowledge generation",
     title: "Choose a generation workspace",
-    body: "Use the original batch photo clone flow, or generate ecommerce product images and ad videos from product photos.",
+    body: "Choose the right AI workspace for batch image generation, product media, or expo company documentation.",
     languageLabel: "Project language",
   },
 } satisfies Record<EcommerceTextLanguage, Record<string, string>>;
 
 function featureHref(href: string, language: EcommerceTextLanguage) {
-  if (href !== "/ecommerce-assets") return href;
+  if (href !== "/ecommerce-assets" && href !== "/expo-company-atlas") return href;
   return `${href}?lang=${language}`;
 }
 
@@ -82,13 +98,27 @@ function initialProjectLanguage(): EcommerceTextLanguage {
   return normalizeEcommerceTextLanguage(window.localStorage.getItem(ECOMMERCE_LANGUAGE_STORAGE_KEY));
 }
 
+function subscribeProjectLanguage(callback: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener("storage", callback);
+  window.addEventListener("rivora-language-change", callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener("rivora-language-change", callback);
+  };
+}
+
+function useProjectLanguage() {
+  return useSyncExternalStore<EcommerceTextLanguage>(subscribeProjectLanguage, initialProjectLanguage, () => "zh");
+}
+
 export default function Home() {
-  const [language, setLanguage] = useState<EcommerceTextLanguage>(initialProjectLanguage);
+  const language = useProjectLanguage();
   const t = copy[language];
 
   function chooseLanguage(nextLanguage: EcommerceTextLanguage) {
-    setLanguage(nextLanguage);
     window.localStorage.setItem(ECOMMERCE_LANGUAGE_STORAGE_KEY, nextLanguage);
+    window.dispatchEvent(new Event("rivora-language-change"));
   }
 
   return (
@@ -137,7 +167,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="mt-10 grid gap-4 md:grid-cols-2">
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
             {features[language].map((feature) => {
               const Icon = feature.icon;
               return (

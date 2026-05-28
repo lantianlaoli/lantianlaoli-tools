@@ -12,6 +12,7 @@
     "test": "node --test --import tsx tests/**/*.test.ts"
   },
   "dependencies": {
+    "@openrouter/sdk": "^0.12.35",
     "@upstash/redis": "^1.38.0",
     "fast-xml-parser": "^5.7.2",
     "jszip": "^3.10.1",

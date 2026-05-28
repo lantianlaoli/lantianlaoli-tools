@@ -2,7 +2,9 @@ import type { GenerationJob, KieAspectRatio, KieResolution } from "./types";
 
 const CREATE_TASK_URL = "https://api.kie.ai/api/v1/jobs/createTask";
 const RECORD_INFO_URL = "https://api.kie.ai/api/v1/jobs/recordInfo";
-const UPLOAD_URL = "https://kieai.redpandaai.co/api/file-base64-upload";
+const BASE64_UPLOAD_URL = "https://kieai.redpandaai.co/api/file-base64-upload";
+const URL_UPLOAD_URL = "https://kieai.redpandaai.co/api/file-url-upload";
+const STREAM_UPLOAD_URL = "https://kieai.redpandaai.co/api/file-stream-upload";
 const MODEL = "gpt-image-2-image-to-image";
 const SEEDANCE_2_FAST_MODEL = "bytedance/seedance-2-fast";
 
@@ -17,6 +19,22 @@ type KieRecordInfo = {
     failCode?: string;
   };
 };
+
+type KieFileUploadResponse = {
+  success?: boolean;
+  code?: number;
+  msg?: string;
+  data?: {
+    downloadUrl?: string;
+    fileName?: string;
+    filePath?: string;
+    fileSize?: number;
+    mimeType?: string;
+    uploadedAt?: string;
+  };
+};
+
+type KieUploadFile = Blob | ArrayBuffer | Uint8Array;
 
 function getKieApiKey() {
   const apiKey = process.env.KIE_API_KEY;
@@ -52,28 +70,92 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3, ti
 }
 
 export async function uploadKieImage(dataUrl: string, fileName: string, uploadPath = "rivora/references") {
-  const response = await fetchWithRetry(UPLOAD_URL, {
+  return uploadKieBase64File({ base64Data: dataUrl, fileName, uploadPath });
+}
+
+function readKieUploadDownloadUrl(payload: KieFileUploadResponse) {
+  const downloadUrl = payload.data?.downloadUrl;
+  if (!payload.success || (payload.code !== undefined && payload.code !== 200) || typeof downloadUrl !== "string") {
+    throw new Error(payload.msg || "KIE upload did not return a download URL.");
+  }
+  return downloadUrl;
+}
+
+export async function uploadKieBase64File(input: {
+  base64Data: string;
+  uploadPath: string;
+  fileName?: string;
+}) {
+  const response = await fetchWithRetry(BASE64_UPLOAD_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${getKieApiKey()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      base64Data: dataUrl,
-      uploadPath,
-      fileName,
+      base64Data: input.base64Data,
+      uploadPath: input.uploadPath,
+      ...(input.fileName ? { fileName: input.fileName } : {}),
     }),
   });
 
   if (!response.ok) {
     throw new Error(`KIE upload failed: ${response.status} ${await response.text()}`);
   }
-  const payload = await response.json();
-  const downloadUrl = payload?.data?.downloadUrl;
-  if (!payload?.success || typeof downloadUrl !== "string") {
-    throw new Error(payload?.msg || "KIE upload did not return a download URL.");
+  return readKieUploadDownloadUrl(await response.json());
+}
+
+export async function uploadKieUrlFile(input: {
+  fileUrl: string;
+  uploadPath: string;
+  fileName?: string;
+}) {
+  const response = await fetchWithRetry(URL_UPLOAD_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${getKieApiKey()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      fileUrl: input.fileUrl,
+      uploadPath: input.uploadPath,
+      ...(input.fileName ? { fileName: input.fileName } : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`KIE URL upload failed: ${response.status} ${await response.text()}`);
   }
-  return downloadUrl;
+  return readKieUploadDownloadUrl(await response.json());
+}
+
+export async function uploadKieStreamFile(input: {
+  file: KieUploadFile;
+  uploadPath: string;
+  fileName?: string;
+}) {
+  const formData = new FormData();
+  const file =
+    input.file instanceof Blob
+      ? input.file
+      : new Blob([input.file instanceof Uint8Array ? new Uint8Array(input.file) : input.file]);
+  if (input.fileName) formData.set("file", file, input.fileName);
+  else formData.set("file", file);
+  formData.set("uploadPath", input.uploadPath);
+  if (input.fileName) formData.set("fileName", input.fileName);
+
+  const response = await fetchWithRetry(STREAM_UPLOAD_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${getKieApiKey()}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`KIE stream upload failed: ${response.status} ${await response.text()}`);
+  }
+  return readKieUploadDownloadUrl(await response.json());
 }
 
 export async function createKieImageTask(input: {

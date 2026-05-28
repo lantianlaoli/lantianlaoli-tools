@@ -136,3 +136,73 @@ export type EcommerceAssetsJob = {
   createdAt: number;
   updatedAt: number;
 };
+
+export type ExpoPhotoKind = "company_intro" | "product" | "contact" | "mixed" | "unknown";
+
+export type ExpoAtlasSlotStatus = "waiting" | "processing" | "success" | "fail";
+
+export type ExpoAtlasPhoto = {
+  id: string;
+  fileName: string;
+  previewUrl?: string;
+  sourceUrl?: string;
+  kind: ExpoPhotoKind;
+  summary: string;
+  extractedText: string[];
+  generationTaskId?: string;
+  generationStatus: ExpoAtlasSlotStatus;
+  generatedUrl?: string;
+  generationPrompt?: string;
+  enhancedTaskId?: string;
+  enhancedStatus: ExpoAtlasSlotStatus;
+  enhancedUrl?: string;
+  enhancedPrompt?: string;
+  error?: string;
+};
+
+export type ExpoAtlasParseStatus = "draft" | "parsing" | "parsed" | "failed";
+
+export type ExpoAtlasProduct = {
+  id: string;
+  name: string;
+  description: string;
+  highlights: string[];
+};
+
+export type ExpoAtlasContact = {
+  phone?: string;
+  email?: string;
+  website?: string;
+  address?: string;
+  person?: string;
+  social?: string;
+  raw?: string;
+};
+
+export type ExpoAtlasCompany = {
+  id: string;
+  name: string;
+  suggestedName?: string;
+  intro: string;
+  products: ExpoAtlasProduct[];
+  contact: ExpoAtlasContact;
+  photoIds: string[];
+  parseStatus?: ExpoAtlasParseStatus;
+  parseError?: string;
+  notes?: string;
+  markdown?: string;
+};
+
+export type ExpoAtlasJob = {
+  id: string;
+  status: "analyzing" | "ready" | "generating" | "completed" | "failed";
+  title: string;
+  imageAspectRatio: Extract<KieAspectRatio, "1:1" | "4:3" | "16:9">;
+  imageResolution: KieResolution;
+  photos: ExpoAtlasPhoto[];
+  companies: ExpoAtlasCompany[];
+  error?: string;
+  persistence: "redis" | "memory";
+  createdAt: number;
+  updatedAt: number;
+};
