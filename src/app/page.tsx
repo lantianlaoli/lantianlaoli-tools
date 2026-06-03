@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Building2, Images, Layers3, Sparkles, Video } from "lucide-react";
+import { ArrowRight, Building2, Globe, Images, Layers3, Sparkles, Video } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import {
   ECOMMERCE_LANGUAGE_STORAGE_KEY,
@@ -35,6 +35,14 @@ const features = {
       meta: "OpenRouter · Image2 · Markdown",
       action: "打开工作台",
     },
+    {
+      href: "/shenzhen-expo-hunter",
+      title: "深圳展会猎手",
+      description: "粘贴展会日程，查找 Reddit 上海外买家的采购意向、供应商需求和现场情报。",
+      icon: Globe,
+      meta: "Reddit · 采购线索 · 展会情报",
+      action: "打开工作台",
+    },
   ],
   en: [
     {
@@ -59,6 +67,14 @@ const features = {
       description: "Organize expo brochures and photos by company, then generate visual cards and Notion-ready Markdown.",
       icon: Building2,
       meta: "OpenRouter · Image2 · Markdown",
+      action: "Open workspace",
+    },
+    {
+      href: "/shenzhen-expo-hunter",
+      title: "Shenzhen Expo Hunter",
+      description: "Paste expo schedules and find overseas buyer purchase intent, supplier needs, and event intelligence from Reddit.",
+      icon: Globe,
+      meta: "Reddit · Purchase Leads · Expo Intel",
       action: "Open workspace",
     },
   ],

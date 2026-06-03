@@ -206,3 +206,113 @@ export type ExpoAtlasJob = {
   createdAt: number;
   updatedAt: number;
 };
+
+export type ShenzhenExpoHunterSearchSettings = {
+  maxSubreddits: number;
+  maxPosts: number;
+  depth: "precise" | "broad";
+};
+
+export type ExpoHunterExpo = {
+  id: string;
+  name: string;
+  date?: string;
+  location?: string;
+  industryKeywords: string[];
+};
+
+export type ExpoHunterSubreddit = {
+  name: string;
+  title: string;
+  description: string;
+  subscribers: number;
+  relevanceScore: number;
+};
+
+export type ExpoHunterLead = {
+  sourceType?: "post";
+  title: string;
+  selftext: string;
+  author: string;
+  subreddit: string;
+  createdUtc: number;
+  score: number;
+  numComments: number;
+  permalink: string;
+  url: string;
+  matchedKeywords: string[];
+  confidence: number;
+};
+
+export type ExpoHunterPhoto = {
+  url: string;
+  postTitle: string;
+  postPermalink: string;
+  author: string;
+  subreddit: string;
+};
+
+export type ExpoHunterIndustryIntel = {
+  sourceType?: "post";
+  title: string;
+  selftext: string;
+  author: string;
+  subreddit: string;
+  createdUtc: number;
+  score: number;
+  numComments: number;
+  permalink: string;
+  url: string;
+  matchedKeywords: string[];
+  confidence: number;
+};
+
+export type ExpoHunterComment = {
+  sourceType: "comment";
+  title: string;
+  selftext: string;
+  author: string;
+  subreddit: string;
+  createdUtc: number;
+  score: number;
+  numComments: 0;
+  permalink: string;
+  url: string;
+  postTitle: string;
+  postPermalink: string;
+  matchedKeywords: string[];
+  confidence: number;
+};
+
+export type ExpoHunterDiscussion = ExpoHunterLead | ExpoHunterIndustryIntel | ExpoHunterComment;
+
+export type ExpoHunterSubredditDiscussionGroup = {
+  subreddit: string;
+  discussions: ExpoHunterDiscussion[];
+};
+
+export type ExpoHunterSlotStatus = "waiting" | "processing" | "success" | "fail";
+
+export type ExpoHunterExpoResult = {
+  expo: ExpoHunterExpo;
+  status: ExpoHunterSlotStatus;
+  error?: string;
+  subreddits: ExpoHunterSubreddit[];
+  leads: ExpoHunterLead[];
+  photos: ExpoHunterPhoto[];
+  industryIntel: ExpoHunterIndustryIntel[];
+  comments: ExpoHunterComment[];
+  discussionsBySubreddit: ExpoHunterSubredditDiscussionGroup[];
+};
+
+export type ShenzhenExpoHunterJob = {
+  id: string;
+  status: "parsed" | "preparing" | "processing" | "completed" | "failed";
+  rawSchedule: string;
+  settings: ShenzhenExpoHunterSearchSettings;
+  expos: ExpoHunterExpo[];
+  results: ExpoHunterExpoResult[];
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+};
