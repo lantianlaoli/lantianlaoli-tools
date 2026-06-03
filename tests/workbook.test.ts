@@ -5,6 +5,8 @@ import JSZip from "jszip";
 import { buildGenerationPrompt } from "../src/lib/prompt";
 import { aspectRatioFromSize, parseWorkbook, resolutionFromSize } from "../src/lib/xlsx-parser";
 
+const SAMPLE_WORKBOOK_PATH = "test_data/clone_competitor/examples.xlsx";
+
 function escapeXml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -89,7 +91,7 @@ async function buildDynamicImageWorkbook({
 }
 
 test("parses the sample workbook rows and WPS DISPIMG images", async () => {
-  const buffer = await readFile("test_data/examples.xlsx");
+  const buffer = await readFile(SAMPLE_WORKBOOK_PATH);
   const workbook = await parseWorkbook(buffer);
 
   assert.equal(workbook.product.title.startsWith("Desk Fan"), true);
@@ -144,7 +146,7 @@ test("chooses KIE resolution tiers from requested pixel size", () => {
 });
 
 test("builds English-first prompts with visible text and reference roles", async () => {
-  const buffer = await readFile("test_data/examples.xlsx");
+  const buffer = await readFile(SAMPLE_WORKBOOK_PATH);
   const workbook = await parseWorkbook(buffer);
   const prompt = buildGenerationPrompt(workbook, workbook.rows[0]);
 

@@ -10,8 +10,10 @@ import { GET as getWorkbookImage } from "../src/app/api/workbook/image/route";
 import { POST as parseWorkbookUpload } from "../src/app/api/workbook/parse/route";
 import type { GenerationJob, ParsedWorkbook } from "../src/lib/types";
 
+const SAMPLE_WORKBOOK_PATH = "test_data/clone_competitor/examples.xlsx";
+
 async function buildWorkbookUploadRequest() {
-  const buffer = await readFile("test_data/examples.xlsx");
+  const buffer = await readFile(SAMPLE_WORKBOOK_PATH);
   const formData = new FormData();
   formData.set(
     "file",
@@ -277,7 +279,7 @@ test("POST /api/generate/regenerate uploads local reference images and passes th
     const payload = await response.json();
     assert.equal(payload.job.taskId, "regenerated-with-local-image");
     assert.ok(capturedUploadBody);
-    assert.equal(capturedUploadBody.uploadPath, "rivora/edit-uploads");
+    assert.equal(capturedUploadBody.uploadPath, "lantian-tools/edit-uploads");
     assert.equal(capturedUploadBody.fileName, "product-replacement.png");
     assert.equal(capturedUploadBody.base64Data, "data:image/png;base64,AA==");
     assert.ok(capturedCreateTaskBody);

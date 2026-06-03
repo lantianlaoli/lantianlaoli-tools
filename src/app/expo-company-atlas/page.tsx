@@ -29,8 +29,9 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
-  ECOMMERCE_LANGUAGE_STORAGE_KEY,
+  LANTIAN_TOOLS_LANGUAGE_CHANGE_EVENT,
   normalizeEcommerceTextLanguage,
+  readStoredEcommerceTextLanguage,
 } from "@/lib/ecommerce-language";
 import type {
   EcommerceTextLanguage,
@@ -80,7 +81,7 @@ const INITIAL_JOB: ExpoAtlasJob = {
 
 const copy = {
   zh: {
-    back: "返回 Rivora",
+    back: "返回 Lantian Tools",
     title: "展会企业图鉴",
     subtitle: "一家公司一行，上传资料照片后自动整理。需要修改时进入详情页处理。",
     addCompany: "新增公司",
@@ -146,7 +147,7 @@ const copy = {
     enhanceRetry: "重试",
   },
   en: {
-    back: "Back to Rivora",
+    back: "Back to Lantian Tools",
     title: "Expo Company Atlas",
     subtitle: "One company per row. Upload material photos and let AI organize them; edit everything from the details page.",
     addCompany: "Add company",
@@ -216,19 +217,20 @@ const copy = {
 function initialTextLanguage(): EcommerceTextLanguage {
   if (typeof window === "undefined") return "zh";
   const params = new URLSearchParams(window.location.search);
-  return normalizeEcommerceTextLanguage(
-    params.get("lang") ?? window.localStorage.getItem(ECOMMERCE_LANGUAGE_STORAGE_KEY)
-  );
+  const paramLanguage = params.get("lang");
+  return paramLanguage
+    ? normalizeEcommerceTextLanguage(paramLanguage)
+    : readStoredEcommerceTextLanguage(window.localStorage);
 }
 
 function subscribeTextLanguage(callback: () => void) {
   if (typeof window === "undefined") return () => {};
   window.addEventListener("storage", callback);
-  window.addEventListener("rivora-language-change", callback);
+  window.addEventListener(LANTIAN_TOOLS_LANGUAGE_CHANGE_EVENT, callback);
   window.addEventListener("popstate", callback);
   return () => {
     window.removeEventListener("storage", callback);
-    window.removeEventListener("rivora-language-change", callback);
+    window.removeEventListener(LANTIAN_TOOLS_LANGUAGE_CHANGE_EVENT, callback);
     window.removeEventListener("popstate", callback);
   };
 }

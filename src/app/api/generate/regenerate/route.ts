@@ -59,7 +59,7 @@ async function uploadLocalImages(
       if (decodedBase64ByteLength(match[2]) > MAX_LOCAL_IMAGE_BYTES) {
         throw new LocalImageValidationError("Each local reference image must be 10MB or smaller.");
       }
-      return uploadKieImage(dataUrl, sanitizeFileName(image.fileName ?? "", index), "rivora/edit-uploads");
+      return uploadKieImage(dataUrl, sanitizeFileName(image.fileName ?? "", index), "lantian-tools/edit-uploads");
     })
   );
 }

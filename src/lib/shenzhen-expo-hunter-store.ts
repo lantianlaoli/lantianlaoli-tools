@@ -1,13 +1,13 @@
 import type { ShenzhenExpoHunterJob } from "./types";
 
 const globalForExpoHunter = globalThis as typeof globalThis & {
-  _rivoraExpoHunterStore?: Map<string, ShenzhenExpoHunterJob>;
+  lantianToolsExpoHunterStore?: Map<string, ShenzhenExpoHunterJob>;
 };
 
 const store =
-  globalForExpoHunter._rivoraExpoHunterStore ??
+  globalForExpoHunter.lantianToolsExpoHunterStore ??
   new Map<string, ShenzhenExpoHunterJob>();
-globalForExpoHunter._rivoraExpoHunterStore = store;
+globalForExpoHunter.lantianToolsExpoHunterStore = store;
 
 export function generateJobId(): string {
   const suffix = Math.random().toString(36).slice(2, 10);

@@ -1,8 +1,8 @@
 import { Redis } from "@upstash/redis";
 
 const globalForRedis = globalThis as typeof globalThis & {
-  rivoraRedis?: Redis;
-  rivoraRedisSignature?: string;
+  lantianToolsRedis?: Redis;
+  lantianToolsRedisSignature?: string;
 };
 
 export type RedisConfig = {
@@ -34,13 +34,13 @@ export function getRedisClient(env: RedisEnv = process.env) {
   if (!config) return undefined;
 
   const signature = `${config.source}:${config.url}`;
-  if (!globalForRedis.rivoraRedis || globalForRedis.rivoraRedisSignature !== signature) {
-    globalForRedis.rivoraRedis = new Redis({
+  if (!globalForRedis.lantianToolsRedis || globalForRedis.lantianToolsRedisSignature !== signature) {
+    globalForRedis.lantianToolsRedis = new Redis({
       url: config.url,
       token: config.token,
     });
-    globalForRedis.rivoraRedisSignature = signature;
+    globalForRedis.lantianToolsRedisSignature = signature;
   }
 
-  return globalForRedis.rivoraRedis;
+  return globalForRedis.lantianToolsRedis;
 }

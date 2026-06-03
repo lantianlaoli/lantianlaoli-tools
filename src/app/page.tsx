@@ -5,7 +5,8 @@ import { ArrowRight, Building2, Globe, Images, Layers3, Sparkles, Video } from "
 import { useSyncExternalStore } from "react";
 import {
   ECOMMERCE_LANGUAGE_STORAGE_KEY,
-  normalizeEcommerceTextLanguage,
+  LANTIAN_TOOLS_LANGUAGE_CHANGE_EVENT,
+  readStoredEcommerceTextLanguage,
 } from "@/lib/ecommerce-language";
 import type { EcommerceTextLanguage } from "@/lib/types";
 
@@ -89,17 +90,17 @@ const features = {
 
 const copy = {
   zh: {
-    utility: "AI 视觉工作台",
-    eyebrow: "素材与资料生成",
-    title: "选择一个生成工作台",
-    body: "从批量图片生成、电商素材到展会企业资料整理，选择适合当前任务的 AI 工作台。",
+    utility: "一人公司工具合集",
+    eyebrow: "Tiny tools for solo founders.",
+    title: "为一人公司快速制作趁手工具",
+    body: "Lantian Tools 汇集批量图片、电商素材、展会资料和线索整理等小工具，帮一人公司把临时需求快速变成可用工作台。",
     languageLabel: "项目语言",
   },
   en: {
-    utility: "AI visual workspaces",
-    eyebrow: "Media and knowledge generation",
-    title: "Choose a generation workspace",
-    body: "Choose the right AI workspace for batch image generation, product media, or expo company documentation.",
+    utility: "Tiny tools for solo founders",
+    eyebrow: "Tiny tools for solo founders.",
+    title: "Small workspaces for solo-company jobs",
+    body: "Lantian Tools turns recurring solo-founder needs into focused tools for batch images, ecommerce media, expo documentation, and buyer research.",
     languageLabel: "Project language",
   },
 } satisfies Record<EcommerceTextLanguage, Record<string, string>>;
@@ -111,16 +112,16 @@ function featureHref(href: string, language: EcommerceTextLanguage) {
 
 function initialProjectLanguage(): EcommerceTextLanguage {
   if (typeof window === "undefined") return "zh";
-  return normalizeEcommerceTextLanguage(window.localStorage.getItem(ECOMMERCE_LANGUAGE_STORAGE_KEY));
+  return readStoredEcommerceTextLanguage(window.localStorage);
 }
 
 function subscribeProjectLanguage(callback: () => void) {
   if (typeof window === "undefined") return () => {};
   window.addEventListener("storage", callback);
-  window.addEventListener("rivora-language-change", callback);
+  window.addEventListener(LANTIAN_TOOLS_LANGUAGE_CHANGE_EVENT, callback);
   return () => {
     window.removeEventListener("storage", callback);
-    window.removeEventListener("rivora-language-change", callback);
+    window.removeEventListener(LANTIAN_TOOLS_LANGUAGE_CHANGE_EVENT, callback);
   };
 }
 
@@ -134,14 +135,14 @@ export default function Home() {
 
   function chooseLanguage(nextLanguage: EcommerceTextLanguage) {
     window.localStorage.setItem(ECOMMERCE_LANGUAGE_STORAGE_KEY, nextLanguage);
-    window.dispatchEvent(new Event("rivora-language-change"));
+    window.dispatchEvent(new Event(LANTIAN_TOOLS_LANGUAGE_CHANGE_EVENT));
   }
 
   return (
     <main className="min-h-screen bg-[#10100f] text-zinc-100">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-6 md:px-6">
         <header className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="font-mono text-2xl font-semibold tracking-tight">Rivora</p>
+          <p className="font-mono text-2xl font-semibold tracking-tight">Lantian Tools</p>
           <div className="flex flex-wrap items-center gap-3">
             <div className="hidden items-center gap-2 text-xs text-zinc-500 sm:flex">
               <Images size={15} aria-hidden="true" />

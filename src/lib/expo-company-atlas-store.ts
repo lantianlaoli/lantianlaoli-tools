@@ -2,11 +2,11 @@ import { getRedisClient } from "./redis";
 import type { ExpoAtlasJob, ExpoAtlasPhoto } from "./types";
 
 const globalForExpoAtlas = globalThis as typeof globalThis & {
-  rivoraExpoCompanyAtlasStore?: Map<string, ExpoAtlasJob>;
+  lantianToolsExpoCompanyAtlasStore?: Map<string, ExpoAtlasJob>;
 };
 
-const store = globalForExpoAtlas.rivoraExpoCompanyAtlasStore ?? new Map<string, ExpoAtlasJob>();
-globalForExpoAtlas.rivoraExpoCompanyAtlasStore = store;
+const store = globalForExpoAtlas.lantianToolsExpoCompanyAtlasStore ?? new Map<string, ExpoAtlasJob>();
+globalForExpoAtlas.lantianToolsExpoCompanyAtlasStore = store;
 
 const JOB_TTL_SECONDS = 60 * 60 * 24 * 30;
 

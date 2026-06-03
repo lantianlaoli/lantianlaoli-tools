@@ -63,7 +63,8 @@ type PersistedPageState = {
   isProductDescriptionExpanded: boolean;
 };
 
-const PAGE_STATE_STORAGE_KEY = "rivora.pageState.v1";
+const PAGE_STATE_STORAGE_KEY = "lantian-tools.pageState.v1";
+const LEGACY_PAGE_STATE_STORAGE_KEY = "rivora.pageState.v1";
 const RESTORABLE_STATUSES = new Set<Status>(["idle", "ready", "polling", "done", "error"]);
 const FONT_REFERENCE_PREFIX =
   "Font reference: Use the same font style and text treatment as shown in the font reference image.\n\n";
@@ -717,8 +718,11 @@ export default function Home() {
   /* eslint-disable react-hooks/set-state-in-effect -- Restore browser-only session state after hydration. */
   useEffect(() => {
     try {
-      const storedState = window.localStorage.getItem(PAGE_STATE_STORAGE_KEY);
+      const storedState =
+        window.localStorage.getItem(PAGE_STATE_STORAGE_KEY) ??
+        window.localStorage.getItem(LEGACY_PAGE_STATE_STORAGE_KEY);
       if (!storedState) return;
+      window.localStorage.setItem(PAGE_STATE_STORAGE_KEY, storedState);
 
       const parsedState = JSON.parse(storedState) as Partial<PersistedPageState>;
       const restoredWorkbook = parsedState.workbook ?? null;
@@ -731,6 +735,7 @@ export default function Home() {
       setIsProductDescriptionExpanded(Boolean(parsedState.isProductDescriptionExpanded));
     } catch {
       window.localStorage.removeItem(PAGE_STATE_STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_PAGE_STATE_STORAGE_KEY);
     } finally {
       setHasRestoredPageState(true);
     }

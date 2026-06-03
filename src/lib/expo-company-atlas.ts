@@ -346,11 +346,13 @@ export function buildExpoImagePrompt(input: {
 
 export function buildExpoCompanyMarkdown(company: ExpoAtlasCompany, photos: ExpoAtlasPhoto[], language?: string) {
   const companyPhotos = photos.filter((photo) => company.photoIds.includes(photo.id));
-  const enhanced = companyPhotos.filter((photo) => photo.enhancedUrl);
+  const generatedPhotos = companyPhotos
+    .map((photo) => ({ photo, imageUrl: photo.enhancedUrl || photo.generatedUrl }))
+    .filter((entry): entry is { photo: ExpoAtlasPhoto; imageUrl: string } => Boolean(entry.imageUrl));
   const products = company.products.length ? company.products : [];
   const contacts = contactLines(company.contact);
 
-  const isZh = language === "zh";
+  const isZh = language !== "en";
   const labels = isZh ? {
     overview: "企业简介",
     products: "核心产品",
@@ -391,8 +393,8 @@ export function buildExpoCompanyMarkdown(company: ExpoAtlasCompany, photos: Expo
     contacts.length ? contacts.join("\n") : `- ${labels.tbd}`,
     "",
     `## ${labels.photos}`,
-    enhanced.length
-      ? enhanced.map((photo) => `![${company.name} - ${photo.fileName}](${photo.enhancedUrl})`).join("\n\n")
+    generatedPhotos.length
+      ? generatedPhotos.map(({ photo, imageUrl }) => `![${company.name} - ${photo.fileName}](${imageUrl})`).join("\n\n")
       : (isZh ? "待生成。" : "Pending."),
     "",
     `## ${labels.summaries}`,
@@ -404,12 +406,11 @@ export function buildExpoCompanyMarkdown(company: ExpoAtlasCompany, photos: Expo
 }
 
 export function refreshExpoMarkdown(job: ExpoAtlasJob): ExpoAtlasJob {
-  // Only preserve existing markdown; don't auto-generate on every refresh.
   return {
     ...job,
     companies: job.companies.map((company) => ({
       ...company,
-      markdown: company.markdown || undefined,
+      markdown: buildExpoCompanyMarkdown(company, job.photos),
     })),
   };
 }

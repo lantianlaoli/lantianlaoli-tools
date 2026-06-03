@@ -71,7 +71,7 @@ export async function callOpenRouter<T>(
   const openRouter = new OpenRouter({
     apiKey: OPENROUTER_API_KEY,
     httpReferer: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-    appTitle: "Rivora",
+    appTitle: "Lantian Tools",
   });
 
   const payload = await openRouter.chat.send({

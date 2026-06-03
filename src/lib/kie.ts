@@ -69,7 +69,7 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3, ti
   throw lastError;
 }
 
-export async function uploadKieImage(dataUrl: string, fileName: string, uploadPath = "rivora/references") {
+export async function uploadKieImage(dataUrl: string, fileName: string, uploadPath = "lantian-tools/references") {
   return uploadKieBase64File({ base64Data: dataUrl, fileName, uploadPath });
 }
 

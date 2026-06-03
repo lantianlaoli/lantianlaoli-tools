@@ -28,7 +28,7 @@ async function uploadLocalImages(
       if (decodedBase64ByteLength(match[2]) > MAX_LOCAL_IMAGE_BYTES) {
         throw new Error("Each reference image must be 10MB or smaller.");
       }
-      return uploadKieImage(dataUrl, image.fileName ?? `ref-${index}.png`, "rivora/ecommerce-edit");
+      return uploadKieImage(dataUrl, image.fileName ?? `ref-${index}.png`, "lantian-tools/ecommerce-edit");
     })
   );
 }

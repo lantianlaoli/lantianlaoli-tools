@@ -96,7 +96,7 @@ export async function createExpoAtlasJob(input: {
       const dataUrl = file.dataUrl?.trim() ?? "";
       validateExpoImageDataUrl(dataUrl);
       const fileName = normalizeFileName(file.fileName, index);
-      const sourceUrl = await uploadKieImage(dataUrl, `${jobId}-${index + 1}-${fileName}`, "rivora/expo-company-atlas");
+      const sourceUrl = await uploadKieImage(dataUrl, `${jobId}-${index + 1}-${fileName}`, "lantian-tools/expo-company-atlas");
       return {
         id: `photo_${index + 1}`,
         fileName,
@@ -144,7 +144,7 @@ export async function parseExpoAtlasCompany(input: {
       const dataUrl = file.dataUrl?.trim() ?? "";
       validateExpoImageDataUrl(dataUrl);
       const fileName = normalizeFileName(file.fileName, index);
-      const sourceUrl = await uploadKieImage(dataUrl, `${idPart}-${index + 1}-${fileName}`, "rivora/expo-company-atlas");
+      const sourceUrl = await uploadKieImage(dataUrl, `${idPart}-${index + 1}-${fileName}`, "lantian-tools/expo-company-atlas");
       return {
         id: file.id?.trim() || `${idPart}_photo_${index + 1}`,
         fileName,

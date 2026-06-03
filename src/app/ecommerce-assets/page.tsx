@@ -25,12 +25,14 @@ import { getEcommerceVideoPresentation } from "@/lib/ecommerce-assets-presentati
 import {
   ECOMMERCE_LANGUAGE_STORAGE_KEY,
   normalizeEcommerceTextLanguage,
+  readStoredEcommerceTextLanguage,
 } from "@/lib/ecommerce-language";
 import {
   addRequirementPhrase,
   appendRequirementPhrase,
   deleteRequirementPhrase,
   parseStoredRequirementPhrases,
+  readStoredRequirementPhrases,
   REQUIREMENT_PHRASES_STORAGE_KEY,
   updateRequirementPhrase,
 } from "@/lib/ecommerce-requirement-phrases";
@@ -62,9 +64,10 @@ const VIEW_META: Record<EcommerceProductView, { label: string; sub: string }> = 
 function initialTextLanguage(): EcommerceTextLanguage {
   if (typeof window === "undefined") return "zh";
   const params = new URLSearchParams(window.location.search);
-  return normalizeEcommerceTextLanguage(
-    params.get("lang") ?? window.localStorage.getItem(ECOMMERCE_LANGUAGE_STORAGE_KEY)
-  );
+  const paramLanguage = params.get("lang");
+  return paramLanguage
+    ? normalizeEcommerceTextLanguage(paramLanguage)
+    : readStoredEcommerceTextLanguage(window.localStorage);
 }
 
 function initialRequirementPhrases() {
@@ -701,7 +704,7 @@ export default function EcommerceAssetsPage() {
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const parsed = parseStoredRequirementPhrases(window.localStorage.getItem(REQUIREMENT_PHRASES_STORAGE_KEY));
+      const parsed = readStoredRequirementPhrases(window.localStorage);
       setRequirementPhrases(parsed.phrases);
       setRequirementPhrasesLoaded(true);
       if (parsed.shouldPersist) {
@@ -737,7 +740,7 @@ export default function EcommerceAssetsPage() {
                 <ArrowLeft size={14} aria-hidden="true" />
                 返回首页
               </Link>
-              <p className="text-[11px] font-semibold uppercase text-lime-200">Rivora Commerce Studio</p>
+              <p className="text-[11px] font-semibold uppercase text-lime-200">Lantian Tools Commerce Studio</p>
               <h1 className="mt-2 text-2xl font-semibold text-white md:text-3xl">电商图片 + 视频素材一键生成</h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
                 上传产品照片，设置图片与视频规格，生成轮播图、详情图和广告短片。

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rivora",
-  description: "Generate ecommerce product images and videos from product photos.",
+  title: "Lantian Tools",
+  description: "Tiny tools for solo founders.",
 };
 
 export default function RootLayout({

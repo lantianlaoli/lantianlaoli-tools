@@ -1,4 +1,5 @@
-export const REQUIREMENT_PHRASES_STORAGE_KEY = "rivora:ecommerce-requirement-phrases";
+export const REQUIREMENT_PHRASES_STORAGE_KEY = "lantian-tools:ecommerce-requirement-phrases";
+export const LEGACY_REQUIREMENT_PHRASES_STORAGE_KEY = "rivora:ecommerce-requirement-phrases";
 
 const LEGACY_CAROUSEL_NO_TEXT_PHRASE = "轮播图不要出现产品本身之外的文字、引导说明、箭头或标签";
 const SPLIT_CAROUSEL_NO_TEXT_PHRASES = [
@@ -62,6 +63,19 @@ export function parseStoredRequirementPhrases(raw: string | null): ParsedRequire
   } catch {
     return { phrases: DEFAULT_REQUIREMENT_PHRASES, shouldPersist: true };
   }
+}
+
+export function readStoredRequirementPhrases(storage: Storage): ParsedRequirementPhrases {
+  const current = storage.getItem(REQUIREMENT_PHRASES_STORAGE_KEY);
+  if (current) return parseStoredRequirementPhrases(current);
+
+  const legacy = storage.getItem(LEGACY_REQUIREMENT_PHRASES_STORAGE_KEY);
+  if (legacy) {
+    storage.setItem(REQUIREMENT_PHRASES_STORAGE_KEY, legacy);
+    return parseStoredRequirementPhrases(legacy);
+  }
+
+  return parseStoredRequirementPhrases(null);
 }
 
 export function appendRequirementPhrase(current: string, phrase: string) {

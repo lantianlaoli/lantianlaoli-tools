@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       const key = `${image.id}:${image.fileName}`;
       const cachedUpload = uploadedUrls.get(key);
       if (cachedUpload) return cachedUpload;
-      const upload = uploadKieImage(image.dataUrl, fileName, "rivora/references");
+      const upload = uploadKieImage(image.dataUrl, fileName, "lantian-tools/references");
       uploadedUrls.set(key, upload);
       return upload;
     }

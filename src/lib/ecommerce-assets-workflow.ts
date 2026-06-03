@@ -174,7 +174,7 @@ export async function createEcommerceAssetsJob(input: {
     const viewLabels = ["front", "side", "back"];
     const uploadResults = await Promise.all(
       input.productPhotoDataUrls.map((dataUrl, i) =>
-        uploadKieImage(dataUrl, `ecommerce-product-${viewLabels[i] ?? i}-${jobId}.jpg`, "rivora/ecommerce-assets")
+        uploadKieImage(dataUrl, `ecommerce-product-${viewLabels[i] ?? i}-${jobId}.jpg`, "lantian-tools/ecommerce-assets")
       )
     );
     const productImageUrls = uploadResults;

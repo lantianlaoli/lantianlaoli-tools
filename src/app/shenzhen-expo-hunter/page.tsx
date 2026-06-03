@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Download,
   ImageIcon,
+  Languages,
   Loader2,
   MapPin,
   MessageCircle,
@@ -26,6 +27,7 @@ import type {
 } from "@/lib/types";
 
 type PageStatus = "idle" | "uploading" | "parsed" | "running" | "error";
+type Locale = "zh" | "en";
 
 const OCR_IMAGE_MAX_EDGE = 2200;
 const OCR_IMAGE_QUALITY = 0.82;
@@ -38,11 +40,108 @@ const DEFAULT_SETTINGS: ShenzhenExpoHunterSearchSettings = {
   depth: "precise",
 };
 
-function slotStatusLabel(status: ExpoHunterSlotStatus) {
-  if (status === "success") return "已整理";
-  if (status === "fail") return "失败";
-  if (status === "processing") return "整理中";
-  return "待整理";
+const I18N = {
+  zh: {
+    appTitle: "深圳展会猎手",
+    backHome: "返回首页",
+    newScreenshot: "新截图",
+    uploadBusyTitle: "正在用 AI 解析日程截图",
+    uploadTitle: "上传展会日程截图",
+    uploadDescription: "AI 会识别截图中的每一个展会，并提取展会名称、日期和地点。",
+    uploadHint: "PNG / JPEG / WebP，最大 10 MB",
+    imagePreviewAlt: "日程截图预览",
+    parseFailed: "截图解析失败。",
+    redditFailed: "Reddit 信息整理失败。",
+    networkError: "网络错误。",
+    invalidImageType: "请选择 PNG、JPEG 或 WebP 图片。",
+    imageTooLarge: "图片需要小于 10 MB。",
+    imageProcessFailed: "图片处理失败，请换一张截图重试。",
+    noSelection: "选择一个展会查看详情。",
+    aiRunning: "AI 正在整理",
+    retryReddit: "重新整理 Reddit 信息",
+    runReddit: "AI 整理 Reddit 信息",
+    waitingDescription: "点击按钮后，AI 会查询过去 6 个月内的 Reddit 相关讨论，并按 subreddit 分类整理。",
+    processingDescription: "正在整理 Reddit 信息。",
+    noDiscussions: "这个展会暂时没有匹配到过去 6 个月内的 Reddit 讨论。",
+    discussionComment: "评论",
+    discussionPost: "帖子",
+    detectedCount: (count: number) => `AI 识别到 ${count} 个展会`,
+    closeError: "关闭错误提示",
+    localeToggle: "Switch to English",
+    exportMarkdown: "MD",
+    exportJson: "JSON",
+    status: {
+      success: "已整理",
+      fail: "失败",
+      processing: "整理中",
+      waiting: "待整理",
+    },
+    time: {
+      seconds: (value: number) => `${value} 秒前`,
+      minutes: (value: number) => `${value} 分钟前`,
+      hours: (value: number) => `${value} 小时前`,
+      days: (value: number) => `${value} 天前`,
+      months: (value: number) => `${value} 个月前`,
+    },
+  },
+  en: {
+    appTitle: "Shenzhen Expo Hunter",
+    backHome: "Back home",
+    newScreenshot: "New screenshot",
+    uploadBusyTitle: "AI is parsing the schedule screenshot",
+    uploadTitle: "Upload an expo schedule screenshot",
+    uploadDescription: "AI will detect each expo in the screenshot and extract its name, dates, and venue.",
+    uploadHint: "PNG / JPEG / WebP, up to 10 MB",
+    imagePreviewAlt: "Schedule screenshot preview",
+    parseFailed: "Could not parse the screenshot.",
+    redditFailed: "Reddit research failed.",
+    networkError: "Network error.",
+    invalidImageType: "Choose a PNG, JPEG, or WebP image.",
+    imageTooLarge: "Image must be under 10 MB.",
+    imageProcessFailed: "Image processing failed. Try another screenshot.",
+    noSelection: "Select an expo to view details.",
+    aiRunning: "AI is researching",
+    retryReddit: "Research Reddit again",
+    runReddit: "AI research Reddit",
+    waitingDescription: "After you click the button, AI will search Reddit discussions from the past 6 months and group them by subreddit.",
+    processingDescription: "Researching Reddit information.",
+    noDiscussions: "No matching Reddit discussions from the past 6 months were found for this expo.",
+    discussionComment: "Comment",
+    discussionPost: "Post",
+    detectedCount: (count: number) => `AI detected ${count} expo${count === 1 ? "" : "s"}`,
+    closeError: "Dismiss error",
+    localeToggle: "切换到中文",
+    exportMarkdown: "MD",
+    exportJson: "JSON",
+    status: {
+      success: "Done",
+      fail: "Failed",
+      processing: "Running",
+      waiting: "Waiting",
+    },
+    time: {
+      seconds: (value: number) => `${value}s ago`,
+      minutes: (value: number) => `${value}m ago`,
+      hours: (value: number) => `${value}h ago`,
+      days: (value: number) => `${value}d ago`,
+      months: (value: number) => `${value}mo ago`,
+    },
+  },
+} as const;
+
+function getInitialLocale(): Locale {
+  if (typeof window === "undefined") return "zh";
+  const stored = window.localStorage.getItem("shenzhen-expo-hunter-locale");
+  if (stored === "zh" || stored === "en") return stored;
+  return window.navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
+}
+
+function slotStatusLabel(status: ExpoHunterSlotStatus, locale: Locale) {
+  const labels = I18N[locale].status;
+  if (status === "success") return labels.success;
+  if (status === "fail") return labels.fail;
+  if (status === "processing") return labels.processing;
+  return labels.waiting;
 }
 
 function slotStatusClass(status: ExpoHunterSlotStatus) {
@@ -52,13 +151,14 @@ function slotStatusClass(status: ExpoHunterSlotStatus) {
   return "border-white/10 bg-white/[0.04] text-zinc-300";
 }
 
-function timeAgo(ts: number): string {
+function timeAgo(ts: number, locale: Locale): string {
+  const time = I18N[locale].time;
   const secs = Math.floor((Date.now() - ts) / 1000);
-  if (secs < 60) return `${secs}s ago`;
-  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
-  if (secs < 2592000) return `${Math.floor(secs / 86400)}d ago`;
-  return `${Math.floor(secs / 2592000)}mo ago`;
+  if (secs < 60) return time.seconds(secs);
+  if (secs < 3600) return time.minutes(Math.floor(secs / 60));
+  if (secs < 86400) return time.hours(Math.floor(secs / 3600));
+  if (secs < 2592000) return time.days(Math.floor(secs / 86400));
+  return time.months(Math.floor(secs / 2592000));
 }
 
 async function compressImage(file: File): Promise<string> {
@@ -115,6 +215,7 @@ function ExpanderToggle({
 }
 
 export default function ShenzhenExpoHunterPage() {
+  const [locale, setLocale] = useState<Locale>(() => getInitialLocale());
   const [job, setJob] = useState<ShenzhenExpoHunterJob | null>(null);
   const [selectedExpoId, setSelectedExpoId] = useState<string | null>(null);
   const [pageStatus, setPageStatus] = useState<PageStatus>("idle");
@@ -125,12 +226,17 @@ export default function ShenzhenExpoHunterPage() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const t = I18N[locale];
   const isBusy = pageStatus === "uploading" || pageStatus === "running";
   const selectedResult = useMemo(
     () => job?.results.find((result) => result.expo.id === selectedExpoId) ?? null,
     [job, selectedExpoId],
   );
   const hasRunnableResults = job?.results.some((result) => result.status === "success") ?? false;
+
+  useEffect(() => {
+    window.localStorage.setItem("shenzhen-expo-hunter-locale", locale);
+  }, [locale]);
 
   useEffect(() => {
     return () => {
@@ -151,7 +257,7 @@ export default function ShenzhenExpoHunterPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        setError(payload.error || "截图解析失败。");
+        setError(payload.error || t.parseFailed);
         setPageStatus("error");
         return;
       }
@@ -160,18 +266,18 @@ export default function ShenzhenExpoHunterPage() {
       setSelectedExpoId(payload.job.results[0]?.expo.id ?? null);
       setPageStatus("parsed");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "网络错误。");
+      setError(err instanceof Error ? err.message : t.networkError);
       setPageStatus("error");
     }
-  }, []);
+  }, [t.networkError, t.parseFailed]);
 
   const handleFileSelect = async (file: File) => {
     if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
-      setError("请选择 PNG、JPEG 或 WebP 图片。");
+      setError(t.invalidImageType);
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      setError("图片需要小于 10 MB。");
+      setError(t.imageTooLarge);
       return;
     }
 
@@ -186,7 +292,7 @@ export default function ShenzhenExpoHunterPage() {
       const compressed = await compressImage(file);
       await createJobFromImage(compressed);
     } catch {
-      setError("图片处理失败，请换一张截图重试。");
+      setError(t.imageProcessFailed);
       setPageStatus("error");
     }
   };
@@ -235,7 +341,7 @@ export default function ShenzhenExpoHunterPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        setError(payload.error || "Reddit 信息整理失败。");
+        setError(payload.error || t.redditFailed);
         setPageStatus("error");
         return;
       }
@@ -243,7 +349,7 @@ export default function ShenzhenExpoHunterPage() {
       setJob(payload.job);
       setPageStatus("parsed");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "网络错误。");
+      setError(err instanceof Error ? err.message : t.networkError);
       setPageStatus("error");
     }
   };
@@ -316,12 +422,12 @@ export default function ShenzhenExpoHunterPage() {
             <Upload size={34} className="mb-5 text-zinc-500" />
           )}
           <h2 className="text-xl font-semibold text-white">
-            {isBusy ? "正在用 AI 解析日程截图" : "上传展会日程截图"}
+            {isBusy ? t.uploadBusyTitle : t.uploadTitle}
           </h2>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-zinc-500">
-            AI 会识别截图中的每一个展会，并提取展会名称、日期和地点。
+            {t.uploadDescription}
           </p>
-          <p className="mt-5 text-xs text-zinc-600">PNG / JPEG / WebP，最大 10 MB</p>
+          <p className="mt-5 text-xs text-zinc-600">{t.uploadHint}</p>
           <input
             ref={fileInputRef}
             type="file"
@@ -334,7 +440,7 @@ export default function ShenzhenExpoHunterPage() {
         {imagePreviewUrl && (
           <div className="mt-5 w-full overflow-hidden rounded-lg border border-white/10 bg-black/30">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={imagePreviewUrl} alt="日程截图预览" className="max-h-72 w-full object-contain" />
+            <img src={imagePreviewUrl} alt={t.imagePreviewAlt} className="max-h-72 w-full object-contain" />
           </div>
         )}
       </section>
@@ -360,7 +466,7 @@ export default function ShenzhenExpoHunterPage() {
             className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-full border px-2 text-[10px] font-semibold ${slotStatusClass(result.status)}`}
           >
             {result.status === "processing" && <Loader2 size={10} className="animate-spin" />}
-            {slotStatusLabel(result.status)}
+            {slotStatusLabel(result.status, locale)}
           </span>
         </div>
         <div className="mt-3 space-y-1.5 text-xs text-zinc-500">
@@ -391,7 +497,7 @@ export default function ShenzhenExpoHunterPage() {
     ) {
       return (
         <div className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-8 text-center text-sm text-zinc-500">
-          这个展会暂时没有匹配到过去 6 个月内的 Reddit 讨论。
+          {t.noDiscussions}
         </div>
       );
     }
@@ -431,7 +537,7 @@ export default function ShenzhenExpoHunterPage() {
                       {discussion.selftext && <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-zinc-400">{discussion.selftext}</p>}
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-zinc-500">
                         <span className="rounded border border-white/10 px-1.5 py-0.5 text-zinc-400">
-                          {discussion.sourceType === "comment" ? "评论" : "帖子"}
+                          {discussion.sourceType === "comment" ? t.discussionComment : t.discussionPost}
                         </span>
                         <span>u/{discussion.author}</span>
                         <span className="flex items-center gap-0.5">
@@ -444,7 +550,7 @@ export default function ShenzhenExpoHunterPage() {
                             {discussion.numComments}
                           </span>
                         )}
-                        <span>{timeAgo(discussion.createdUtc * 1000)}</span>
+                        <span>{timeAgo(discussion.createdUtc * 1000, locale)}</span>
                       </div>
                     </div>
                   ))}
@@ -461,7 +567,7 @@ export default function ShenzhenExpoHunterPage() {
     if (!selectedResult) {
       return (
         <section className="flex min-h-80 items-center justify-center rounded-lg border border-dashed border-white/10 bg-white/[0.015] p-8 text-center text-sm text-zinc-500">
-          选择一个展会查看详情。
+          {t.noSelection}
         </section>
       );
     }
@@ -477,7 +583,7 @@ export default function ShenzhenExpoHunterPage() {
               <h2 className="text-xl font-semibold leading-tight text-white">{result.expo.name}</h2>
               <span className={`inline-flex h-6 items-center gap-1 rounded-full border px-2 text-[10px] font-semibold ${slotStatusClass(result.status)}`}>
                 {result.status === "processing" && <Loader2 size={10} className="animate-spin" />}
-                {slotStatusLabel(result.status)}
+                {slotStatusLabel(result.status, locale)}
               </span>
             </div>
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-500">
@@ -505,17 +611,17 @@ export default function ShenzhenExpoHunterPage() {
             {result.status === "processing" || pageStatus === "running" ? (
               <>
                 <Loader2 size={15} className="animate-spin" />
-                AI 正在整理
+                {t.aiRunning}
               </>
             ) : result.status === "fail" ? (
               <>
                 <RefreshCw size={15} />
-                重新整理 Reddit 信息
+                {t.retryReddit}
               </>
             ) : (
               <>
                 <Sparkles size={15} />
-                AI 整理 Reddit 信息
+                {t.runReddit}
               </>
             )}
           </button>
@@ -531,12 +637,12 @@ export default function ShenzhenExpoHunterPage() {
           {result.status === "waiting" ? (
             <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-4 py-10 text-center">
               <Search size={28} className="mx-auto mb-3 text-zinc-600" />
-              <p className="text-sm text-zinc-500">点击按钮后，AI 会查询过去 6 个月内的 Reddit 相关讨论，并按 subreddit 分类整理。</p>
+              <p className="text-sm text-zinc-500">{t.waitingDescription}</p>
             </div>
           ) : result.status === "processing" ? (
             <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-4 py-10 text-center">
               <Loader2 size={28} className="mx-auto mb-3 animate-spin text-amber-200" />
-              <p className="text-sm text-amber-100">正在整理 Reddit 信息。</p>
+              <p className="text-sm text-amber-100">{t.processingDescription}</p>
             </div>
           ) : (
             renderRedditResults(result)
@@ -552,10 +658,20 @@ export default function ShenzhenExpoHunterPage() {
         <header className="flex items-center justify-between border-b border-white/10 pb-4">
           <Link href="/" className="flex items-center gap-1 text-sm text-zinc-500 transition hover:text-zinc-300">
             <ArrowLeft size={16} />
-            返回首页
+            {t.backHome}
           </Link>
-          <h1 className="text-lg font-semibold text-white">深圳展会猎手</h1>
+          <h1 className="text-lg font-semibold text-white">{t.appTitle}</h1>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLocale((current) => (current === "zh" ? "en" : "zh"))}
+              className="flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-zinc-300 transition hover:bg-white/[0.08]"
+              aria-label={t.localeToggle}
+              title={t.localeToggle}
+            >
+              <Languages size={13} />
+              {locale === "zh" ? "EN" : "中文"}
+            </button>
             {job && (
               <button
                 type="button"
@@ -564,7 +680,7 @@ export default function ShenzhenExpoHunterPage() {
                 className="flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-zinc-300 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ImageIcon size={13} />
-                新截图
+                {t.newScreenshot}
               </button>
             )}
             {job && hasRunnableResults && (
@@ -575,7 +691,7 @@ export default function ShenzhenExpoHunterPage() {
                   className="flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-zinc-300 transition hover:bg-white/[0.08]"
                 >
                   <Download size={13} />
-                  MD
+                  {t.exportMarkdown}
                 </button>
                 <button
                   type="button"
@@ -583,7 +699,7 @@ export default function ShenzhenExpoHunterPage() {
                   className="flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-xs font-medium text-zinc-300 transition hover:bg-white/[0.08]"
                 >
                   <Download size={13} />
-                  JSON
+                  {t.exportJson}
                 </button>
               </>
             )}
@@ -597,7 +713,7 @@ export default function ShenzhenExpoHunterPage() {
               type="button"
               onClick={() => setError(null)}
               className="ml-3 text-red-300 underline transition hover:text-red-200"
-              aria-label="关闭错误提示"
+              aria-label={t.closeError}
             >
               <X size={14} className="inline" />
             </button>
@@ -610,7 +726,7 @@ export default function ShenzhenExpoHunterPage() {
           <div className="grid gap-5 py-5 lg:grid-cols-[360px_minmax(0,1fr)]">
             <aside className="space-y-3 lg:sticky lg:top-5 lg:self-start">
               <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3">
-                <p className="mb-3 px-1 text-xs font-semibold text-zinc-500">AI 识别到 {job.results.length} 个展会</p>
+                <p className="mb-3 px-1 text-xs font-semibold text-zinc-500">{t.detectedCount(job.results.length)}</p>
                 <div className="space-y-2">
                   {job.results.map((result) => (
                     <div key={result.expo.id}>{renderExpoCard(result)}</div>
