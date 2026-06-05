@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Building2, Globe, Images, Layers3, Sparkles, Video } from "lucide-react";
+import { ArrowRight, Building2, Globe, Images, Layers3, MessageSquareText, Sparkles, Video } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import {
   ECOMMERCE_LANGUAGE_STORAGE_KEY,
@@ -44,6 +44,14 @@ const features = {
       meta: "Reddit · 采购线索 · 展会情报",
       action: "打开工作台",
     },
+    {
+      href: "/reviewzon",
+      title: "Reviewzon 评论洞察",
+      description: "上传 Amazon 评论表格，自动整理高频好评点、差评点，并导出可筛选 Excel。",
+      icon: MessageSquareText,
+      meta: "OpenRouter · XLSX · 评论标签",
+      action: "打开工作台",
+    },
   ],
   en: [
     {
@@ -76,6 +84,14 @@ const features = {
       description: "Paste expo schedules and find overseas buyer purchase intent, supplier needs, and event intelligence from Reddit.",
       icon: Globe,
       meta: "Reddit · Purchase Leads · Expo Intel",
+      action: "Open workspace",
+    },
+    {
+      href: "/reviewzon",
+      title: "Reviewzon Insights",
+      description: "Upload Amazon review spreadsheets, extract top pros and cons, and export a filter-ready Excel report.",
+      icon: MessageSquareText,
+      meta: "OpenRouter · XLSX · Review Tags",
       action: "Open workspace",
     },
   ],

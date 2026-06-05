@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Reviewzon | File-to-File Engine</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Newsreader:ital,wght@0,400;0,600;0,700;1,400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-primary-container": "#89391e",
+                        "on-secondary": "#ffffff",
+                        "secondary": "#6b635c",
+                        "secondary-container": "#ece0d7",
+                        "on-surface-variant": "#65655c",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-highest": "#eae8de",
+                        "tertiary": "#805a62",
+                        "primary-fixed-dim": "#ffc8b7",
+                        "on-primary": "#fff6f3",
+                        "outline": "#818178",
+                        "tertiary-fixed-dim": "#f0c0c9",
+                        "on-tertiary-fixed": "#513038",
+                        "error": "#a64542",
+                        "tertiary-container": "#ffcdd7",
+                        "surface": "#fffcf7",
+                        "error-dim": "#4e0309",
+                        "surface-variant": "#eae8de",
+                        "surface-container-low": "#fcf9f3",
+                        "surface-tint": "#99462a",
+                        "on-secondary-fixed-variant": "#625a53",
+                        "primary-dim": "#8a3a1f",
+                        "surface-dim": "#e4e3d7",
+                        "primary": "#99462a",
+                        "primary-fixed": "#ffdbd0",
+                        "on-surface": "#383831",
+                        "on-primary-fixed": "#70280e",
+                        "secondary-fixed-dim": "#ded2ca",
+                        "primary-container": "#ffdbd0",
+                        "error-container": "#fe8983",
+                        "on-secondary-fixed": "#453e38",
+                        "on-primary-fixed-variant": "#954327",
+                        "inverse-on-surface": "#9e9d98",
+                        "on-background": "#383831",
+                        "surface-container-high": "#f0eee5",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#0e0e0c",
+                        "secondary-dim": "#5f5750",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-container": "#66434b",
+                        "tertiary-fixed": "#ffcdd7",
+                        "secondary-fixed": "#ece0d7",
+                        "on-secondary-container": "#58504a",
+                        "tertiary-dim": "#734e56",
+                        "surface-bright": "#fffcf7",
+                        "on-tertiary-fixed-variant": "#714c54",
+                        "background": "#fffcf7",
+                        "outline-variant": "#babab0",
+                        "surface-container": "#f6f4ec",
+                        "inverse-primary": "#fb9270",
+                        "on-error-container": "#752121"
+                    },
+                    fontFamily: {
+                        "headline": ["Newsreader"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .scholar-gradient {
+            background: linear-gradient(145deg, #99462a 0%, #8a3a1f 100%);
+        }
+        .upload-dashed {
+            background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='4' ry='4' stroke='%23BABAB0FF' stroke-width='2' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body min-h-screen flex flex-col">
+<!-- Top Navigation -->
+<nav class="w-full top-0 sticky z-50 bg-[#fffcf7] dark:bg-[#1c1c1a] shadow-[0_12px_40px_rgba(56,56,49,0.06)]">
+<div class="flex justify-between items-center px-8 py-6 max-w-7xl mx-auto">
+<div class="flex items-center gap-4">
+<span class="text-2xl font-serif text-[#383831] dark:text-[#eae8de] font-headline italic tracking-tight">Reviewzon</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="font-label text-xs tracking-widest uppercase text-[#99462a] dark:text-[#d97757] border-b-2 border-[#99462a] transition-opacity duration-300" href="#">How it works</a>
+<button class="material-symbols-outlined text-[#383831] dark:text-[#eae8de] opacity-80 hover:opacity-100 transition-opacity" data-icon="account_circle">account_circle</button>
+</div>
+</div>
+</nav>
+<main class="flex-grow max-w-4xl mx-auto w-full px-6 py-16 md:py-24">
+<!-- Hero Section -->
+<header class="mb-16 text-center md:text-left">
+<h1 class="font-headline text-5xl md:text-6xl font-bold italic tracking-tight text-on-surface mb-4">Review-to-Tag Engine</h1>
+<p class="font-body text-lg text-on-surface-variant max-w-xl leading-relaxed">
+                Seamless file-to-file processing. Upload your raw spreadsheet and receive a structured dataset with normalized sentiment and metadata.
+            </p>
+</header>
+<!-- File Upload Zone -->
+<section class="mb-16">
+<div class="upload-dashed rounded-lg bg-surface-container-low/30 p-12 md:p-20 text-center transition-all hover:bg-surface-container-low/60 group cursor-pointer relative overflow-hidden">
+<input accept=".xlsx" class="absolute inset-0 opacity-0 cursor-pointer" type="file"/>
+<div class="relative z-10 flex flex-col items-center gap-6">
+<div class="w-20 h-20 bg-primary/5 rounded-full flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-5xl" data-icon="description">description</span>
+</div>
+<div class="space-y-2">
+<h3 class="font-headline text-3xl italic text-on-surface">Drop your reviews spreadsheet here</h3>
+<p class="text-on-surface-variant font-body">or click to browse from your computer <span class="text-primary font-medium">(.xlsx)</span></p>
+</div>
+</div>
+</div>
+</section>
+<!-- Preview Section -->
+<section class="space-y-8 mb-16">
+<div class="flex justify-between items-end border-b border-outline-variant/10 pb-4">
+<div class="flex items-center gap-3">
+<h2 class="font-headline text-3xl font-semibold text-on-surface">Extraction Preview</h2>
+<span class="bg-surface-container-highest text-on-surface-variant px-2 py-0.5 rounded text-[10px] uppercase tracking-wider font-medium">Idle</span>
+</div>
+<span class="font-label text-[10px] tracking-[0.2em] uppercase text-outline">Column Mapping View</span>
+</div>
+<div class="overflow-x-auto opacity-40 select-none pointer-events-none">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high/50">
+<th class="p-4 font-label text-xs tracking-widest uppercase text-on-surface-variant border-b border-outline-variant/10">ID</th>
+<th class="p-4 font-label text-xs tracking-widest uppercase text-on-surface-variant border-b border-outline-variant/10">Content Fragment</th>
+<th class="p-4 font-label text-xs tracking-widest uppercase text-on-surface-variant border-b border-outline-variant/10">Pros</th>
+<th class="p-4 font-label text-xs tracking-widest uppercase text-on-surface-variant border-b border-outline-variant/10">Cons</th>
+<th class="p-4 font-label text-xs tracking-widest uppercase text-on-surface-variant border-b border-outline-variant/10">Tags</th>
+</tr>
+</thead>
+<tbody class="text-sm">
+<tr class="border-b border-outline-variant/5">
+<td class="p-4 font-mono text-xs text-outline">#—</td>
+<td class="p-4 italic text-outline-variant">"Awaiting file upload to begin processing..."</td>
+<td class="p-4 text-outline-variant">—</td>
+<td class="p-4 text-outline-variant">—</td>
+<td class="p-4 text-outline-variant">—</td>
+</tr>
+<tr class="border-b border-outline-variant/5">
+<td class="p-4 font-mono text-xs text-outline">#—</td>
+<td class="p-4 italic text-outline-variant">"Processed data will appear in this table preview."</td>
+<td class="p-4 text-outline-variant">—</td>
+<td class="p-4 text-outline-variant">—</td>
+<td class="p-4 text-outline-variant">—</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="flex items-center justify-center py-12 border-2 border-dashed border-outline-variant/10 rounded-xl bg-surface-container-low/20">
+<div class="flex flex-col items-center gap-2 opacity-60">
+<span class="material-symbols-outlined text-4xl text-outline-variant" data-icon="data_table">data_table</span>
+<p class="font-label text-xs tracking-widest uppercase text-on-surface-variant">No data to display</p>
+</div>
+</div>
+</section>
+<!-- Primary Call to Action / Success State (Visible when complete) -->
+<section class="bg-surface-container-highest border border-outline-variant/20 rounded-xl p-8 flex flex-col md:flex-row items-center justify-between gap-8 shadow-[0_20px_50px_rgba(56,56,49,0.08)]">
+<div class="flex items-center gap-6">
+<div class="w-16 h-16 rounded-full scholar-gradient flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-3xl" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div>
+<h4 class="font-headline text-2xl italic font-semibold text-on-surface">Ready to Finalize</h4>
+<p class="text-on-surface-variant text-sm">Upload a file to generate your academic-grade report.</p>
+</div>
+</div>
+<button class="w-full md:w-auto flex items-center justify-center gap-3 bg-on-surface text-surface px-10 py-5 rounded-md font-medium hover:bg-on-surface/90 transition-all shadow-lg active:scale-95 group">
+<span class="material-symbols-outlined" data-icon="file_download">file_download</span>
+<span class="text-lg">Download Excel Report</span>
+</button>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full mt-auto border-t border-[#babab0]/20 bg-[#fcf9f3] dark:bg-[#1c1c1a]">
+<div class="flex flex-col md:flex-row justify-between items-center px-12 py-16 w-full max-w-7xl mx-auto">
+<div class="mb-8 md:mb-0">
+<span class="font-serif text-[#383831] text-lg font-headline italic">Reviewzon</span>
+<p class="font-['Inter'] text-xs tracking-widest uppercase text-[#383831] dark:text-[#eae8de] mt-2">© 2024 Reviewzon Engine. All rights reserved.</p>
+</div>
+<div class="flex gap-10">
+<a class="font-['Inter'] text-xs tracking-widest uppercase text-[#383831] dark:text-[#eae8de] hover:text-[#99462a] transition-colors opacity-80 hover:opacity-100" href="#">Privacy Policy</a>
+<a class="font-['Inter'] text-xs tracking-widest uppercase text-[#383831] dark:text-[#eae8de] hover:text-[#99462a] transition-colors opacity-80 hover:opacity-100" href="#">Terms of Service</a>
+<a class="font-['Inter'] text-xs tracking-widest uppercase text-[#383831] dark:text-[#eae8de] hover:text-[#99462a] transition-colors opacity-80 hover:opacity-100" href="#">Support</a>
+</div>
+</div>
+</footer>
+</body></html>
