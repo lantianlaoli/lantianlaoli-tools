@@ -806,8 +806,10 @@ test("manufacturer promo prompt appends the pet replacement note when provided",
 test("getPetReplacementNote returns language-specific text", () => {
   const en = getPetReplacementNote("en");
   const zh = getPetReplacementNote("zh");
-  assert.match(en, /fully replace it with the pet/i);
-  assert.match(zh, /完全替换为用户提供的宠物照中的宠物/);
+  assert.match(en, /fully replace any animal, pet, or cartoon creature/i);
+  assert.match(en, /sole identity reference/i);
+  assert.match(zh, /完全替换为用户提供的宠物参考照中的这只宠物/);
+  assert.match(zh, /产物身份的唯一来源/);
   assert.notEqual(en, zh);
 });
 

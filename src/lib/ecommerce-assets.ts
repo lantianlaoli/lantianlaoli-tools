@@ -202,9 +202,17 @@ export function fallbackManufacturerPromoAnalysis(textLanguage: EcommerceTextLan
 
 export function getPetReplacementNote(lang: EcommerceTextLanguage): string {
   if (lang === "zh") {
-    return "如果原图中出现宠物或动物,必须完全替换为用户提供的宠物照中的宠物,保持原图中的姿势、比例、视角、位置和视线方向,不要保留原宠物。";
+    return [
+      "必须把原图中出现的所有动物 / 宠物 / 卡通生物完全替换为用户提供的宠物参考照中的这只宠物。",
+      "无论原图里动物的大小、位置、是否被遮挡或只是装饰,都必须在最终图里消失,换成用户的宠物,并保持原图中的姿势、比例、视角、位置和视线方向。",
+      "用户提供的宠物参考照是产物身份的唯一来源;厂家源图只用来参考构图、姿势和场景,不要把源图里的动物、logo、角标、文字、参数、装饰元素保留到产物里。",
+    ].join(" ");
   }
-  return "If a pet or animal appears in the original source image, fully replace it with the pet shown in the provided pet reference photos, preserving the original pose, scale, gaze, and placement. Do not keep the original pet.";
+  return [
+    "You MUST fully replace any animal, pet, or cartoon creature that appears in the source image with the specific pet shown in the user-provided pet reference photos.",
+    "No matter how small, occluded, or decorative the original animal is, it must be removed entirely and replaced by the user's pet, keeping the original pose, scale, viewpoint, placement, and gaze.",
+    "The user's pet reference photos are the sole identity reference for the subject. The source image is only a layout / pose / scene reference. Do not keep any animal, logo, badge, text, spec wall, or decoration from the source image in the final output.",
+  ].join(" ");
 }
 
 export function buildManufacturerPromoCarouselPrompt(input: {
