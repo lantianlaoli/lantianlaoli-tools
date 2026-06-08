@@ -228,13 +228,20 @@ export function buildManufacturerPromoCarouselPrompt(input: {
       ? "重新设计为干净、高级、适合电商轮播图的视觉风格。"
       : "Redesign into a clean premium ecommerce carousel style.");
 
-  const petLine = input.petReplacementNote
-    ? `\nPet replacement rule (MUST follow): ${input.petReplacementNote}`
+  const petRule = input.petReplacementNote
+    ? [
+        "",
+        "===== ABSOLUTE PRIORITY RULE (overrides all other instructions below) =====",
+        input.petReplacementNote,
+        "End of priority rule. Other rules in this prompt only apply to the parts of the image that the priority rule does not cover.",
+        "",
+      ].join("\n")
     : "";
 
   return [
     "Create one redesigned ecommerce carousel image using the uploaded manufacturer promotional image as the source reference.",
     `Source image number: ${input.sourceIndex + 1}.`,
+    petRule,
     "Use image-to-image mode. Preserve the real product identity, shape, materials, proportions, colors, packaging, logo placement if present, and recognizable details from the source image.",
     "Do not copy the original crowded layout. Rebuild the visual composition according to the user's style and copy-selection requirements.",
     `Product subject: ${input.analysis.productSubject}.`,
@@ -252,7 +259,6 @@ export function buildManufacturerPromoCarouselPrompt(input: {
     `User style and copy-selection requirements (MUST follow): ${customRequirements}`,
     languageInstruction(input.textLanguage),
     "Keep the final image clean, premium, legible, and product-led. Avoid dense copy, fake certifications, fake logos, watermarks, QR codes, prices, and unrelated props.",
-    petLine,
   ].filter(Boolean).join("\n");
 }
 

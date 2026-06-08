@@ -799,8 +799,13 @@ test("manufacturer promo prompt appends the pet replacement note when provided",
     petReplacementNote: note,
   });
 
-  assert.match(prompt, /Pet replacement rule \(MUST follow\)/);
+  assert.match(prompt, /ABSOLUTE PRIORITY RULE/);
   assert.ok(prompt.includes(note));
+  // The pet rule must appear in the first half of the prompt so the model
+  // treats it as a high-priority instruction instead of trailing guidance.
+  const head = prompt.split("\n").slice(0, 6).join("\n");
+  assert.match(head, /ABSOLUTE PRIORITY RULE/);
+  assert.match(head, /real, photogenic cat/i);
 });
 
 test("getPetReplacementNote returns language-specific text", () => {
