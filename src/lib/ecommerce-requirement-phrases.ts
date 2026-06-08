@@ -3,6 +3,10 @@ import type { EcommerceTextLanguage } from "./types";
 export const REQUIREMENT_PHRASES_STORAGE_KEY = "lantian-tools:ecommerce-requirement-phrases";
 export const LEGACY_REQUIREMENT_PHRASES_STORAGE_KEY = "rivora:ecommerce-requirement-phrases";
 
+function storageKeyFor(lang: EcommerceTextLanguage) {
+  return `${REQUIREMENT_PHRASES_STORAGE_KEY}:${lang}`;
+}
+
 const ZH_LEGACY_CAROUSEL_NO_TEXT_PHRASE = "轮播图不要出现产品本身之外的文字、引导说明、箭头或标签";
 const ZH_SPLIT_CAROUSEL_NO_TEXT_PHRASES = [
   "轮播图不要出现产品本身之外的文字",
@@ -94,16 +98,33 @@ export function parseStoredRequirementPhrases(raw: string | null, lang: Ecommerc
 }
 
 export function readStoredRequirementPhrases(storage: Storage, lang: EcommerceTextLanguage): ParsedRequirementPhrases {
-  const current = storage.getItem(REQUIREMENT_PHRASES_STORAGE_KEY);
-  if (current) return parseStoredRequirementPhrases(current, lang);
+  const keyed = storage.getItem(storageKeyFor(lang));
+  if (keyed) return parseStoredRequirementPhrases(keyed, lang);
 
-  const legacy = storage.getItem(LEGACY_REQUIREMENT_PHRASES_STORAGE_KEY);
-  if (legacy) {
-    storage.setItem(REQUIREMENT_PHRASES_STORAGE_KEY, legacy);
-    return parseStoredRequirementPhrases(legacy, lang);
+  // Migration: a previous version stored a single shared list under the
+  // un-suffixed key. Claim it for the current language and clear the legacy
+  // slot so it isn't re-imported into a different language later.
+  const shared = storage.getItem(REQUIREMENT_PHRASES_STORAGE_KEY);
+  if (shared) {
+    const parsed = parseStoredRequirementPhrases(shared, lang);
+    storage.setItem(storageKeyFor(lang), JSON.stringify(parsed.phrases));
+    storage.removeItem(REQUIREMENT_PHRASES_STORAGE_KEY);
+    return { ...parsed, shouldPersist: parsed.shouldPersist || true };
+  }
+
+  const legacyRivora = storage.getItem(LEGACY_REQUIREMENT_PHRASES_STORAGE_KEY);
+  if (legacyRivora) {
+    const parsed = parseStoredRequirementPhrases(legacyRivora, lang);
+    storage.setItem(storageKeyFor(lang), JSON.stringify(parsed.phrases));
+    storage.removeItem(LEGACY_REQUIREMENT_PHRASES_STORAGE_KEY);
+    return { ...parsed, shouldPersist: parsed.shouldPersist || true };
   }
 
   return parseStoredRequirementPhrases(null, lang);
+}
+
+export function writeStoredRequirementPhrases(storage: Storage, lang: EcommerceTextLanguage, phrases: string[]): void {
+  storage.setItem(storageKeyFor(lang), JSON.stringify(phrases));
 }
 
 export function appendRequirementPhrase(current: string, phrase: string) {
@@ -129,3 +150,4 @@ export function updateRequirementPhrase(phrases: string[], index: number, phrase
 export function deleteRequirementPhrase(phrases: string[], index: number) {
   return phrases.filter((_, itemIndex) => itemIndex !== index);
 }
+

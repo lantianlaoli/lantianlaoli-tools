@@ -34,10 +34,9 @@ import {
   appendRequirementPhrase,
   deleteRequirementPhrase,
   getDefaultRequirementPhrases,
-  parseStoredRequirementPhrases,
   readStoredRequirementPhrases,
-  REQUIREMENT_PHRASES_STORAGE_KEY,
   updateRequirementPhrase,
+  writeStoredRequirementPhrases,
 } from "@/lib/ecommerce-requirement-phrases";
 import type {
   EcommerceAssetsJob,
@@ -922,7 +921,7 @@ export default function EcommerceAssetsPage() {
       setRequirementPhrases(parsed.phrases);
       setRequirementPhrasesLoaded(true);
       if (parsed.shouldPersist) {
-        window.localStorage.setItem(REQUIREMENT_PHRASES_STORAGE_KEY, JSON.stringify(parsed.phrases));
+        writeStoredRequirementPhrases(window.localStorage, textLanguage, parsed.phrases);
       }
     });
     return () => window.cancelAnimationFrame(frame);
@@ -930,8 +929,8 @@ export default function EcommerceAssetsPage() {
 
   useEffect(() => {
     if (!requirementPhrasesLoaded) return;
-    window.localStorage.setItem(REQUIREMENT_PHRASES_STORAGE_KEY, JSON.stringify(requirementPhrases));
-  }, [requirementPhrases, requirementPhrasesLoaded]);
+    writeStoredRequirementPhrases(window.localStorage, textLanguage, requirementPhrases);
+  }, [requirementPhrases, requirementPhrasesLoaded, textLanguage]);
 
   useEffect(() => {
     if (status !== "polling" || !job) return;
