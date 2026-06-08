@@ -11,6 +11,8 @@ export async function POST(request: Request) {
       productPhotoDataUrls?: string[];
       productPhotoDataUrl?: string;
       manufacturerPromoDataUrls?: string[];
+      petPhotoDataUrls?: { front?: string | null; side?: string | null; back?: string | null };
+      petReplacementEnabled?: boolean;
       customRequirements?: string;
       textLanguage?: unknown;
       imageResolution?: string;
@@ -30,12 +32,30 @@ export async function POST(request: Request) {
 
     const validUrls = productPhotoDataUrls.filter(Boolean);
     const manufacturerPromoDataUrls = (body.manufacturerPromoDataUrls ?? []).filter(Boolean);
+    const petPhotoDataUrls = body.petPhotoDataUrls && (
+      body.petPhotoDataUrls.front
+      || body.petPhotoDataUrls.side
+      || body.petPhotoDataUrls.back
+    )
+      ? {
+          front: body.petPhotoDataUrls.front ?? null,
+          side: body.petPhotoDataUrls.side ?? null,
+          back: body.petPhotoDataUrls.back ?? null,
+        }
+      : undefined;
+    const petReplacementEnabled = body.petReplacementEnabled === true && Boolean(petPhotoDataUrls);
     if (sourceMode === "manufacturer-promos") {
       if (manufacturerPromoDataUrls.length === 0) {
         return NextResponse.json({ error: "At least one manufacturerPromoDataUrl is required." }, { status: 400 });
       }
       if (manufacturerPromoDataUrls.length > 6) {
         return NextResponse.json({ error: "Upload up to 6 manufacturer promo images." }, { status: 400 });
+      }
+      if (petReplacementEnabled && (!petPhotoDataUrls?.front || !petPhotoDataUrls.side || !petPhotoDataUrls.back)) {
+        return NextResponse.json(
+          { error: "Pet replacement requires front, side, and back pet photos." },
+          { status: 400 },
+        );
       }
     } else if (validUrls.length === 0) {
       return NextResponse.json({ error: "At least one productPhotoDataUrl is required." }, { status: 400 });
@@ -45,6 +65,8 @@ export async function POST(request: Request) {
       sourceMode,
       productPhotoDataUrls: validUrls,
       manufacturerPromoDataUrls,
+      petPhotoDataUrls,
+      petReplacementEnabled,
       customRequirements: body.customRequirements,
       textLanguage: body.textLanguage,
       imageResolution: body.imageResolution,
