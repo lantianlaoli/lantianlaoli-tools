@@ -203,15 +203,15 @@ export function fallbackManufacturerPromoAnalysis(textLanguage: EcommerceTextLan
 export function getPetReplacementNote(lang: EcommerceTextLanguage): string {
   if (lang === "zh") {
     return [
-      "必须把原图中出现的所有动物 / 宠物 / 卡通生物完全替换为用户提供的宠物参考照中的这只宠物。",
-      "无论原图里动物的大小、位置、是否被遮挡或只是装饰,都必须在最终图里消失,换成用户的宠物,并保持原图中的姿势、比例、视角、位置和视线方向。",
-      "用户提供的宠物参考照是产物身份的唯一来源;厂家源图只用来参考构图、姿势和场景,不要把源图里的动物、logo、角标、文字、参数、装饰元素保留到产物里。",
+      "第一步:判断原图中是否真实出现了动物 / 宠物(实物或插画)。如果原图中没有任何动物,最终图里也不得出现任何动物,直接保留原图中的产品外观、包装、构图和文字。",
+      "如果原图中出现了动物,仅替换那只动物,使用用户提供的宠物参考照中的猫作为身份来源。替换时保留原动物所在位置、姿势、比例、视角和视线,不要把宠物放到产品本身上,不要覆盖产品,不要改变产品外观、材质、包装或品牌信息。",
+      "宠物参考照只用于替换原图中的动物,不要影响产品本身,也不要影响产品上的 logo、文字、角标、参数、装饰带等任何元素。",
     ].join(" ");
   }
   return [
-    "You MUST fully replace any animal, pet, or cartoon creature that appears in the source image with the specific pet shown in the user-provided pet reference photos.",
-    "No matter how small, occluded, or decorative the original animal is, it must be removed entirely and replaced by the user's pet, keeping the original pose, scale, viewpoint, placement, and gaze.",
-    "The user's pet reference photos are the sole identity reference for the subject. The source image is only a layout / pose / scene reference. Do not keep any animal, logo, badge, text, spec wall, or decoration from the source image in the final output.",
+    "Step 1: Look at the source image and decide whether it actually contains an animal or pet (real or illustrated). If it does NOT contain any animal, do not introduce any animal in the final output — keep the product, packaging, composition, and text exactly as they appear in the source.",
+    "If the source image DOES contain an animal, replace only that animal with the cat shown in the user-provided pet reference photos. Preserve the original animal's position, pose, scale, viewpoint, and gaze. Do not place the pet on the product itself, do not cover the product, and do not change the product's appearance, materials, packaging, or any branding information.",
+    "The pet reference photos are used solely to replace the original animal. They must not alter the product, nor touch any logo, text, badge, spec, or decorative band on the product.",
   ].join(" ");
 }
 
