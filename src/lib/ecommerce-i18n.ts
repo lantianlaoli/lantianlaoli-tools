@@ -89,10 +89,9 @@ const STRINGS = {
     en: "Click a quick phrase to append it. You can keep detail copy or constrain carousel copy separately.",
   },
   step2SubtitleManufacturer: {
-    zh: "选择模板后可继续改写，生成时会结合厂家图解析结果执行取舍。",
-    en: "Pick a template and edit freely — the parser will decide what to keep or cut.",
+    zh: "预设风格模板可直接使用；你也可以在 Quick Phrases 中继续增改自定义短语。",
+    en: "Preset style templates are ready to use. You can also add or edit more in Quick Phrases.",
   },
-  styleTemplatesTitle: { zh: "风格模板", en: "Style Templates" },
   quickPhrasesTitle: { zh: "快捷用语", en: "Quick Phrases" },
   quickPhrasesEmpty: { zh: "暂无快捷用语", en: "No quick phrases yet" },
   quickPhrasesAdd: { zh: "新增", en: "Add" },

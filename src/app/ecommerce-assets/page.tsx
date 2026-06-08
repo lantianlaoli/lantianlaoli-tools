@@ -11,6 +11,7 @@ import {
   ImageIcon,
   Languages,
   Loader2,
+  Lock,
   Monitor,
   Pencil,
   Plus,
@@ -20,7 +21,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getEcommerceVideoPresentation } from "@/lib/ecommerce-assets-presentation";
 import {
   ECOMMERCE_LANGUAGE_STORAGE_KEY,
@@ -59,12 +60,11 @@ type ManufacturerPromoImage = { id: string; fileName: string; dataUrl: string };
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MANUFACTURER_PROMO_LIMIT = 6;
-const MANUFACTURER_STYLE_TEMPLATE_KEYS = [
+const LOCKED_STYLE_TEMPLATE_KEYS = [
   "styleTemplateApple",
   "styleTemplateTech",
   "styleTemplateXiaohongshu",
 ] as const;
-type StyleTemplateKey = (typeof MANUFACTURER_STYLE_TEMPLATE_KEYS)[number];
 
 const VIEW_META: Record<EcommerceProductView, { key: "viewFront" | "viewSide" | "viewBack" }> = {
   front: { key: "viewFront" },
@@ -472,6 +472,10 @@ export default function EcommerceAssetsPage() {
   const [customRequirements, setCustomRequirements] = useState("");
   const [requirementPhrases, setRequirementPhrases] = useState<string[]>(() => initialRequirementPhrases(textLanguage));
   const [requirementPhrasesLoaded, setRequirementPhrasesLoaded] = useState(false);
+  const lockedPhrases = useMemo(
+    () => LOCKED_STYLE_TEMPLATE_KEYS.map((key) => t(key, textLanguage)),
+    [textLanguage]
+  );
   const [isAddingPhrase, setIsAddingPhrase] = useState(false);
   const [newPhraseDraft, setNewPhraseDraft] = useState("");
   const [editingPhraseIndex, setEditingPhraseIndex] = useState<number | null>(null);
@@ -750,6 +754,7 @@ export default function EcommerceAssetsPage() {
   function persistNewPhrase() {
     const trimmed = newPhraseDraft.trim();
     if (!trimmed) return;
+    if (lockedPhrases.includes(trimmed) || requirementPhrases.includes(trimmed)) return;
     setRequirementPhrases((current) => addRequirementPhrase(current, trimmed));
     setNewPhraseDraft("");
     setIsAddingPhrase(false);
@@ -757,6 +762,7 @@ export default function EcommerceAssetsPage() {
 
   function startEditingPhrase(index: number, phrase: string) {
     if (isBusy) return;
+    if (index < lockedPhrases.length) return;
     setIsAddingPhrase(false);
     setNewPhraseDraft("");
     setEditingPhraseIndex(index);
@@ -765,16 +771,23 @@ export default function EcommerceAssetsPage() {
 
   function persistEditedPhrase() {
     if (editingPhraseIndex === null) return;
+    if (editingPhraseIndex < lockedPhrases.length) {
+      setEditingPhraseIndex(null);
+      setEditingPhraseDraft("");
+      return;
+    }
     const trimmed = editingPhraseDraft.trim();
     if (!trimmed) return;
-    setRequirementPhrases((current) => updateRequirementPhrase(current, editingPhraseIndex, trimmed));
+    if (lockedPhrases.includes(trimmed)) return;
+    setRequirementPhrases((current) => updateRequirementPhrase(current, editingPhraseIndex - lockedPhrases.length, trimmed));
     setEditingPhraseIndex(null);
     setEditingPhraseDraft("");
   }
 
   function removeRequirementPhrase(index: number) {
     if (isBusy) return;
-    setRequirementPhrases((current) => deleteRequirementPhrase(current, index));
+    if (index < lockedPhrases.length) return;
+    setRequirementPhrases((current) => deleteRequirementPhrase(current, index - lockedPhrases.length));
     if (editingPhraseIndex === index) {
       setEditingPhraseIndex(null);
       setEditingPhraseDraft("");
@@ -1066,25 +1079,6 @@ export default function EcommerceAssetsPage() {
                 </p>
               </div>
 
-              {sourceMode === "manufacturer-promos" ? (
-                <div className="mb-3 rounded-lg border border-lime-300/15 bg-lime-300/[0.04] p-3">
-                  <p className="mb-3 text-xs font-semibold text-lime-100">{t("styleTemplatesTitle", textLanguage)}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {MANUFACTURER_STYLE_TEMPLATE_KEYS.map((key) => (
-                      <button
-                        key={key}
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => setCustomRequirements((current) => appendRequirementPhrase(current, t(key, textLanguage)))}
-                        className="max-w-full rounded-md border border-lime-300/20 bg-black/20 px-3 py-2 text-left text-xs leading-5 text-zinc-200 transition hover:border-lime-300/45 hover:bg-lime-300/[0.08] disabled:cursor-not-allowed disabled:text-zinc-600"
-                      >
-                        {t(key, textLanguage)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
               <div className="mb-3 rounded-lg border border-emerald-300/10 bg-[#050806] p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <span className="text-xs font-semibold text-zinc-300">{t("quickPhrasesTitle", textLanguage)}</span>
@@ -1105,15 +1099,21 @@ export default function EcommerceAssetsPage() {
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {requirementPhrases.length ? (
-                    requirementPhrases.map((phrase, index) => {
+                  {[...lockedPhrases, ...requirementPhrases].length ? (
+                    [...lockedPhrases, ...requirementPhrases].map((phrase, index) => {
+                      const isLocked = index < lockedPhrases.length;
                       const isEditing = editingPhraseIndex === index;
-                      const duplicateEdit = requirementPhrases.some((item, itemIndex) => itemIndex !== index && item === editingPhraseDraft.trim());
+                      const userIndex = index - lockedPhrases.length;
+                      const duplicateEdit = !isLocked && requirementPhrases.some((item, itemIndex) => itemIndex !== userIndex && item === editingPhraseDraft.trim());
                       return (
                         <div
                           key={`${phrase}-${index}`}
                           data-requirement-phrase={phrase}
-                          className="group flex max-w-full items-center gap-1 rounded-md border border-emerald-300/10 bg-white/[0.03] p-1"
+                          className={`group flex max-w-full items-center gap-1 rounded-md border p-1 ${
+                            isLocked
+                              ? "border-lime-300/20 bg-lime-300/[0.05]"
+                              : "border-emerald-300/10 bg-white/[0.03]"
+                          }`}
                         >
                           {isEditing ? (
                             <>
@@ -1159,26 +1159,37 @@ export default function EcommerceAssetsPage() {
                               >
                                 {phrase}
                               </button>
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                onClick={() => startEditingPhrase(index, phrase)}
-                                className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 transition hover:bg-white/10 hover:text-zinc-200 disabled:opacity-50"
-                                aria-label={t("quickPhrasesEditAria", textLanguage)}
-                                title={t("quickPhrasesTitleAttr", textLanguage)}
-                              >
-                                <Pencil size={14} aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                onClick={() => removeRequirementPhrase(index)}
-                                className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 transition hover:bg-red-500/15 hover:text-red-100 disabled:opacity-50"
-                                aria-label={t("quickPhrasesDeleteAria", textLanguage)}
-                                title={t("quickPhrasesTitleDelete", textLanguage)}
-                              >
-                                <Trash2 size={14} aria-hidden="true" />
-                              </button>
+                              {isLocked ? (
+                                <span
+                                  className="flex h-9 w-9 items-center justify-center rounded text-lime-200/70"
+                                  aria-hidden="true"
+                                >
+                                  <Lock size={14} />
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => startEditingPhrase(index, phrase)}
+                                    className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 transition hover:bg-white/10 hover:text-zinc-200 disabled:opacity-50"
+                                    aria-label={t("quickPhrasesEditAria", textLanguage)}
+                                    title={t("quickPhrasesTitleAttr", textLanguage)}
+                                  >
+                                    <Pencil size={14} aria-hidden="true" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => removeRequirementPhrase(index)}
+                                    className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 transition hover:bg-red-500/15 hover:text-red-100 disabled:opacity-50"
+                                    aria-label={t("quickPhrasesDeleteAria", textLanguage)}
+                                    title={t("quickPhrasesTitleDelete", textLanguage)}
+                                  >
+                                    <Trash2 size={14} aria-hidden="true" />
+                                  </button>
+                                </>
+                              )}
                             </>
                           )}
                         </div>
@@ -1199,7 +1210,7 @@ export default function EcommerceAssetsPage() {
                       />
                       <button
                         type="button"
-                        disabled={isBusy || !newPhraseDraft.trim() || requirementPhrases.includes(newPhraseDraft.trim())}
+                        disabled={isBusy || !newPhraseDraft.trim() || lockedPhrases.includes(newPhraseDraft.trim()) || requirementPhrases.includes(newPhraseDraft.trim())}
                         onClick={persistNewPhrase}
                         className="flex h-9 w-9 items-center justify-center rounded text-lime-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:text-zinc-700"
                         aria-label={t("quickPhrasesSaveNewAria", textLanguage)}
