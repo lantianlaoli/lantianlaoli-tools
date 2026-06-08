@@ -5,6 +5,7 @@ import { POST as receiveKieCallback } from "../src/app/api/kie/callback/route";
 import { POST as retryEcommerceAsset } from "../src/app/api/ecommerce-assets/retry/route";
 import { POST as refreshEcommerceAssetsStatus } from "../src/app/api/ecommerce-assets/status/route";
 import { getEcommerceVideoPresentation } from "../src/lib/ecommerce-assets-presentation";
+import { getDefaultRequirementPhrases } from "../src/lib/ecommerce-requirement-phrases";
 import {
   buildEcommerceImagePrompts,
   buildEcommerceStoryboardPrompt,
@@ -927,4 +928,28 @@ test("getBrandLogoNote mentions the 8% uniform margin for every corner", () => {
     assert.match(en, /exactly 8% of the image's shorter side/i);
     assert.match(zh, /各 8%/);
   }
+});
+
+test("getDefaultRequirementPhrases returns language-specific defaults (no Chinese in English set, no English in Chinese set)", () => {
+  const zh = getDefaultRequirementPhrases("zh");
+  const en = getDefaultRequirementPhrases("en");
+
+  assert.ok(zh.length > 0, "zh defaults should not be empty");
+  assert.ok(en.length > 0, "en defaults should not be empty");
+
+  for (const phrase of en) {
+    assert.doesNotMatch(phrase, /[一-鿿]/, `English default must not contain CJK: ${phrase}`);
+  }
+  for (const phrase of zh) {
+    assert.doesNotMatch(phrase, /[A-Za-z]{6,}/, `Chinese default should not contain long Latin runs: ${phrase}`);
+  }
+
+  assert.ok(
+    en.some((phrase) => /Apple-style minimal white background/i.test(phrase)),
+    "English defaults should include the Apple-style template",
+  );
+  assert.ok(
+    zh.some((phrase) => /Apple 极简白底黑字风格/.test(phrase)),
+    "Chinese defaults should include the Apple-style template",
+  );
 });

@@ -117,20 +117,6 @@ const STRINGS = {
     en: "e.g. Apple-style white background, bold black copy, keep one main selling point per image, drop the spec walls.",
   },
 
-  // Style templates (Chinese-only long strings become English here too)
-  styleTemplateApple: {
-    zh: "Apple 极简白底黑字风格：白底、大留白、产品全身或细节特写；只保留最重要的信息，文案压缩成一句短句；文字特别大，左右或上下结构，避免参数堆叠。",
-    en: "Apple-style minimal white background with bold black type: white canvas, generous whitespace, full-product or detail hero shot; keep only one short headline, oversized type, side-by-side or stacked layout, no spec walls.",
-  },
-  styleTemplateTech: {
-    zh: "高级科技品牌风格：深浅对比清晰，产品居中或偏侧，保留核心卖点和关键参数，删除促销感文字、角标和杂乱装饰。",
-    en: "Premium tech-brand style: strong light/dark contrast, product centered or off-center, keep the core benefit and key specs, drop promo badges, stickers, and visual clutter.",
-  },
-  styleTemplateXiaohongshu: {
-    zh: "小红书干净种草风格：浅色背景、自然光、产品细节特写，保留一句利益点，文字少但醒目。",
-    en: "Clean Xiaohongshu-style: light background, natural light, product detail close-ups, keep one benefit line — minimal copy, but punchy.",
-  },
-
   // Step 3 — Settings
   step3Kicker: { zh: "Step 3", en: "Step 3" },
   step3Title: { zh: "生成设置", en: "Generation Settings" },
