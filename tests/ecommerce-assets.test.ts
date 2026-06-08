@@ -10,6 +10,7 @@ import {
   buildEcommerceStoryboardPrompt,
   buildManufacturerPromoCarouselPrompt,
   fallbackEcommerceBrief,
+  fallbackManufacturerPromoAnalysis,
   getPetReplacementNote,
 } from "../src/lib/ecommerce-assets";
 
@@ -808,4 +809,17 @@ test("getPetReplacementNote returns language-specific text", () => {
   assert.match(en, /fully replace it with the pet/i);
   assert.match(zh, /完全替换为用户提供的宠物照中的宠物/);
   assert.notEqual(en, zh);
+});
+
+test("fallbackManufacturerPromoAnalysis returns language-specific safe defaults", () => {
+  const en = fallbackManufacturerPromoAnalysis("en");
+  const zh = fallbackManufacturerPromoAnalysis("zh");
+  assert.ok(en.productSubject.length > 0);
+  assert.ok(zh.productSubject.length > 0);
+  assert.match(zh.productSubject, /原厂家宣传图/);
+  assert.match(en.productSubject, /manufacturer promotional image/i);
+  assert.ok(en.visualHierarchy.layout.length > 0);
+  assert.ok(zh.visualHierarchy.layout.length > 0);
+  assert.deepEqual(en.visualHierarchy.primaryText, "");
+  assert.deepEqual(en.keyMessages, []);
 });

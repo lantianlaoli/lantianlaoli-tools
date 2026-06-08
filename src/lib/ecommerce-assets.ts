@@ -165,6 +165,41 @@ export async function analyzeManufacturerPromoForEcommerceAssets(
   return normalizeManufacturerPromoAnalysis(response);
 }
 
+export function fallbackManufacturerPromoAnalysis(textLanguage: EcommerceTextLanguage): EcommerceManufacturerPromoAnalysis {
+  if (textLanguage === "zh") {
+    return {
+      productSubject: "原厂家宣传图中的产品,保持外观、比例、材质和可识别细节",
+      visualHierarchy: {
+        primaryText: "",
+        secondaryText: [],
+        specs: [],
+        badges: [],
+        logoText: [],
+        decorativeText: [],
+        layout: "从原图推断",
+      },
+      productVisuals: "从原厂家宣传图推断产品形状、材质、颜色和可见细节",
+      keyMessages: [],
+      rewriteGuidance: "保留产品,按用户风格与文案选择要求重新设计宣传图",
+    };
+  }
+  return {
+    productSubject: "the product in the original manufacturer promotional image, preserving appearance, proportions, materials, and recognizable details",
+    visualHierarchy: {
+      primaryText: "",
+      secondaryText: [],
+      specs: [],
+      badges: [],
+      logoText: [],
+      decorativeText: [],
+      layout: "infer from the source image",
+    },
+    productVisuals: "infer product shape, materials, color, and visible details from the source manufacturer promo image",
+    keyMessages: [],
+    rewriteGuidance: "preserve the product and redesign the promotional image according to the user's style and copy-selection requirements",
+  };
+}
+
 export function getPetReplacementNote(lang: EcommerceTextLanguage): string {
   if (lang === "zh") {
     return "如果原图中出现宠物或动物,必须完全替换为用户提供的宠物照中的宠物,保持原图中的姿势、比例、视角、位置和视线方向,不要保留原宠物。";

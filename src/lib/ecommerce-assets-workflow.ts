@@ -6,6 +6,7 @@ import {
   buildEcommerceVideoPrompt,
   buildManufacturerPromoCarouselPrompt,
   fallbackEcommerceBrief,
+  fallbackManufacturerPromoAnalysis,
   getPetReplacementNote,
 } from "./ecommerce-assets";
 import {
@@ -146,7 +147,16 @@ async function createManufacturerPromoImageSlots(input: {
   const callBackUrl = getKieCallbackUrl();
   const results = await Promise.all(
     input.manufacturerPromoImageUrls.map(async (imageUrl, index) => {
-      const analysis = await analyzeManufacturerPromoForEcommerceAssets(imageUrl, input.textLanguage);
+      let analysis;
+      try {
+        analysis = await analyzeManufacturerPromoForEcommerceAssets(imageUrl, input.textLanguage);
+      } catch (error) {
+        console.error(
+          `[ecommerce-assets] Falling back after manufacturer promo analysis failed for image ${index + 1}:`,
+          error instanceof Error ? error.message : error,
+        );
+        analysis = fallbackManufacturerPromoAnalysis(input.textLanguage);
+      }
       const prompt = buildManufacturerPromoCarouselPrompt({
         analysis,
         customRequirements: input.customRequirements,
