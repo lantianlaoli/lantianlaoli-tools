@@ -165,17 +165,29 @@ export async function analyzeManufacturerPromoForEcommerceAssets(
   return normalizeManufacturerPromoAnalysis(response);
 }
 
+export function getPetReplacementNote(lang: EcommerceTextLanguage): string {
+  if (lang === "zh") {
+    return "如果原图中出现宠物或动物,必须完全替换为用户提供的宠物照中的宠物,保持原图中的姿势、比例、视角、位置和视线方向,不要保留原宠物。";
+  }
+  return "If a pet or animal appears in the original source image, fully replace it with the pet shown in the provided pet reference photos, preserving the original pose, scale, gaze, and placement. Do not keep the original pet.";
+}
+
 export function buildManufacturerPromoCarouselPrompt(input: {
   analysis: EcommerceManufacturerPromoAnalysis;
   customRequirements?: string;
   textLanguage: EcommerceTextLanguage;
   sourceIndex: number;
+  petReplacementNote?: string;
 }) {
   const hierarchy = input.analysis.visualHierarchy;
   const customRequirements = input.customRequirements?.trim()
     || (input.textLanguage === "zh"
       ? "重新设计为干净、高级、适合电商轮播图的视觉风格。"
       : "Redesign into a clean premium ecommerce carousel style.");
+
+  const petLine = input.petReplacementNote
+    ? `\nPet replacement rule (MUST follow): ${input.petReplacementNote}`
+    : "";
 
   return [
     "Create one redesigned ecommerce carousel image using the uploaded manufacturer promotional image as the source reference.",
@@ -197,7 +209,8 @@ export function buildManufacturerPromoCarouselPrompt(input: {
     `User style and copy-selection requirements (MUST follow): ${customRequirements}`,
     languageInstruction(input.textLanguage),
     "Keep the final image clean, premium, legible, and product-led. Avoid dense copy, fake certifications, fake logos, watermarks, QR codes, prices, and unrelated props.",
-  ].join("\n");
+    petLine,
+  ].filter(Boolean).join("\n");
 }
 
 function viewReferenceNote(numViews: number) {

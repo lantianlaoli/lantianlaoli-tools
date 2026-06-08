@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     };
 
     const { prompt, resultUrl, refinement } = body;
+    // TODO(v2): thread pet replacement context (job.petReplacement.petImageUrls) into the regenerate call for manufacturer-promo slots.
     if (!prompt) return NextResponse.json({ error: "Original prompt is required." }, { status: 400 });
     if (!resultUrl) return NextResponse.json({ error: "Current result URL is required." }, { status: 400 });
     if (!refinement?.trim()) return NextResponse.json({ error: "Refinement text is required." }, { status: 400 });

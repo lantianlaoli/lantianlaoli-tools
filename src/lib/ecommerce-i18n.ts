@@ -161,6 +161,23 @@ const STRINGS = {
   generateButton: { zh: "一键生成", en: "Generate" },
   downloadZipButton: { zh: "下载 ZIP", en: "Download ZIP" },
 
+  // Pet replacement (manufacturer-promo mode only)
+  petSectionTitle: { zh: "宠物替换", en: "Pet Replacement" },
+  petToggleLabel: { zh: "启用宠物替换", en: "Enable pet replacement" },
+  petEmptyHint: {
+    zh: "上传正面 / 侧面 / 背面的宠物照，源图里有宠物时会自动换成你的宠物并保持原姿势。",
+    en: "Upload front / side / back photos of your pet. If a pet appears in the source image, it will be replaced with yours in the same pose.",
+  },
+  petViewRequired: {
+    zh: "启用宠物替换时,需要上传正面 / 侧面 / 背面 3 张宠物照。",
+    en: "Pet replacement requires front, side, and back pet photos.",
+  },
+  petReplaceCta: { zh: "替换", en: "Replace" },
+  petRemoveCta: { zh: "移除", en: "Remove" },
+  petReplaceAriaFront: { zh: "替换正视图", en: "Replace front view" },
+  petReplaceAriaSide: { zh: "替换侧视图", en: "Replace side view" },
+  petReplaceAriaBack: { zh: "替换背视图", en: "Replace back view" },
+
   // Results section
   resultsTitle: { zh: "生成结果", en: "Results" },
   resultsKicker: { zh: "生成结果", en: "Results" },

@@ -6,6 +6,7 @@ import {
   buildEcommerceVideoPrompt,
   buildManufacturerPromoCarouselPrompt,
   fallbackEcommerceBrief,
+  getPetReplacementNote,
 } from "./ecommerce-assets";
 import {
   generateEcommerceAssetsJobId,
@@ -139,6 +140,8 @@ async function createManufacturerPromoImageSlots(input: {
   textLanguage: EcommerceTextLanguage;
   imageResolution: KieResolution;
   imageAspectRatio: KieAspectRatio;
+  petHostedUrls?: string[];
+  petReplacementNote?: string;
 }) {
   const callBackUrl = getKieCallbackUrl();
   const results = await Promise.all(
@@ -149,10 +152,14 @@ async function createManufacturerPromoImageSlots(input: {
         customRequirements: input.customRequirements,
         textLanguage: input.textLanguage,
         sourceIndex: index,
+        petReplacementNote: input.petReplacementNote,
       });
+      const inputUrls = input.petHostedUrls?.length
+        ? [imageUrl, ...input.petHostedUrls]
+        : [imageUrl];
       const taskId = await createKieImageTask({
         prompt,
-        inputUrls: [imageUrl],
+        inputUrls,
         aspectRatio: input.imageAspectRatio,
         resolution: input.imageResolution,
         callBackUrl,
@@ -181,6 +188,8 @@ export async function createEcommerceAssetsJob(input: {
   productPhotoDataUrls: string[];
   sourceMode?: unknown;
   manufacturerPromoDataUrls?: string[];
+  petPhotoDataUrls?: { front: string | null; side: string | null; back: string | null };
+  petReplacementEnabled?: boolean;
   customRequirements?: string;
   textLanguage?: unknown;
   imageResolution?: string;
@@ -243,12 +252,33 @@ export async function createEcommerceAssetsJob(input: {
           uploadKieImage(dataUrl, `manufacturer-promo-${i + 1}-${jobId}.jpg`, "lantian-tools/ecommerce-manufacturer-promos")
         )
       );
+
+      const petViews = input.petPhotoDataUrls;
+      const wantsPetReplacement = Boolean(input.petReplacementEnabled)
+        && Boolean(petViews?.front) && Boolean(petViews?.side) && Boolean(petViews?.back);
+      const petImageUrls: string[] = [];
+      if (wantsPetReplacement && petViews) {
+        const orderedViews: Array<"front" | "side" | "back"> = ["front", "side", "back"];
+        const petDataUrls = orderedViews.map((view) => petViews[view]!);
+        const hosted = await Promise.all(
+          petDataUrls.map((dataUrl, i) =>
+            uploadKieImage(dataUrl, `pet-${orderedViews[i]}-${jobId}.jpg`, "lantian-tools/ecommerce-pets")
+          )
+        );
+        petImageUrls.push(...hosted);
+      }
+      const petReplacementNote = petImageUrls.length === 3
+        ? getPetReplacementNote(textLanguage)
+        : undefined;
+
       const manufacturerSlots = await createManufacturerPromoImageSlots({
         manufacturerPromoImageUrls,
         customRequirements: input.customRequirements,
         textLanguage,
         imageResolution,
         imageAspectRatio,
+        petHostedUrls: petImageUrls.length === 3 ? petImageUrls : undefined,
+        petReplacementNote,
       });
 
       return {
@@ -257,6 +287,9 @@ export async function createEcommerceAssetsJob(input: {
         imageResolution,
         manufacturerPromoImageUrls,
         manufacturerPromoAnalyses: manufacturerSlots.analyses,
+        petReplacement: petImageUrls.length === 3
+          ? { enabled: true, petImageUrls }
+          : undefined,
         carouselImages: manufacturerSlots.carouselImages,
         detailImages: [],
         video: { status: "waiting", prompt: "" },

@@ -50,9 +50,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Product image URLs are required." }, { status: 400 });
     }
 
+    const petImageUrls = job.sourceMode === "manufacturer-promos"
+      && job.petReplacement?.petImageUrls?.length === 3
+      ? job.petReplacement.petImageUrls
+      : [];
+    const inputUrls = [...productImageUrls, ...petImageUrls];
+
     const taskId = await createKieImageTask({
       prompt: slot.prompt,
-      inputUrls: productImageUrls,
+      inputUrls,
       aspectRatio: normalizeAspectRatio(job.imageAspectRatio),
       resolution: normalizeResolution(job.imageResolution),
       callBackUrl: getKieCallbackUrl(),

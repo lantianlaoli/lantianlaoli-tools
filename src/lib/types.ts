@@ -152,6 +152,10 @@ export type EcommerceAssetsJob = {
   manufacturerPromoAnalyses?: EcommerceManufacturerPromoAnalysis[];
   brief?: EcommerceCreativeBrief;
   customRequirements?: string;
+  petReplacement?: {
+    enabled: boolean;
+    petImageUrls: string[];
+  };
   carouselImages: EcommerceImageSlot[];
   detailImages: EcommerceImageSlot[];
   video: EcommerceVideoSlot;

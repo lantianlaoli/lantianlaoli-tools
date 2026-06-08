@@ -8,7 +8,9 @@ import { getEcommerceVideoPresentation } from "../src/lib/ecommerce-assets-prese
 import {
   buildEcommerceImagePrompts,
   buildEcommerceStoryboardPrompt,
+  buildManufacturerPromoCarouselPrompt,
   fallbackEcommerceBrief,
+  getPetReplacementNote,
 } from "../src/lib/ecommerce-assets";
 
 test("ecommerce image prompts keep English text concise by default", () => {
@@ -747,4 +749,63 @@ test("POST /api/ecommerce-assets/retry uses the matching manufacturer promo sour
     if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
     else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   }
+});
+
+test("manufacturer promo prompt omits pet replacement when note is absent", () => {
+  const prompt = buildManufacturerPromoCarouselPrompt({
+    analysis: {
+      productSubject: "test product",
+      visualHierarchy: {
+        primaryText: "",
+        secondaryText: [],
+        specs: [],
+        badges: [],
+        logoText: [],
+        decorativeText: [],
+        layout: "centered",
+      },
+      productVisuals: "test visuals",
+      keyMessages: [],
+      rewriteGuidance: "test guidance",
+    },
+    textLanguage: "en",
+    sourceIndex: 0,
+  });
+
+  assert.equal(/pet replacement rule/i.test(prompt), false);
+});
+
+test("manufacturer promo prompt appends the pet replacement note when provided", () => {
+  const note = getPetReplacementNote("en");
+  const prompt = buildManufacturerPromoCarouselPrompt({
+    analysis: {
+      productSubject: "test product",
+      visualHierarchy: {
+        primaryText: "",
+        secondaryText: [],
+        specs: [],
+        badges: [],
+        logoText: [],
+        decorativeText: [],
+        layout: "centered",
+      },
+      productVisuals: "test visuals",
+      keyMessages: [],
+      rewriteGuidance: "test guidance",
+    },
+    textLanguage: "en",
+    sourceIndex: 0,
+    petReplacementNote: note,
+  });
+
+  assert.match(prompt, /Pet replacement rule \(MUST follow\)/);
+  assert.ok(prompt.includes(note));
+});
+
+test("getPetReplacementNote returns language-specific text", () => {
+  const en = getPetReplacementNote("en");
+  const zh = getPetReplacementNote("zh");
+  assert.match(en, /fully replace it with the pet/i);
+  assert.match(zh, /完全替换为用户提供的宠物照中的宠物/);
+  assert.notEqual(en, zh);
 });

@@ -13,6 +13,7 @@ import {
   Loader2,
   Lock,
   Monitor,
+  PawPrint,
   Pencil,
   Plus,
   RefreshCw,
@@ -28,7 +29,7 @@ import {
   normalizeEcommerceTextLanguage,
   readStoredEcommerceTextLanguage,
 } from "@/lib/ecommerce-language";
-import { formatT, t } from "@/lib/ecommerce-i18n";
+import { formatT, t, type StringKey } from "@/lib/ecommerce-i18n";
 import {
   addRequirementPhrase,
   appendRequirementPhrase,
@@ -261,7 +262,7 @@ function SectionShell({
   );
 }
 
-function ProductPhotoSlot({
+function PhotoUploadSlot({
   view,
   photo,
   isBusy,
@@ -270,6 +271,9 @@ function ProductPhotoSlot({
   onUpload,
   onRemove,
   inputRef,
+  showRequired,
+  replaceAriaKey,
+  removeAriaKey,
 }: {
   view: EcommerceProductView;
   photo: EcommerceProductPhotoSlot;
@@ -279,6 +283,9 @@ function ProductPhotoSlot({
   onUpload: (view: EcommerceProductView, file: File) => void;
   onRemove: (view: EcommerceProductView) => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
+  showRequired?: boolean;
+  replaceAriaKey?: StringKey;
+  removeAriaKey?: StringKey;
 }) {
   const meta = VIEW_META[view];
   const isReading = readingView === view;
@@ -290,11 +297,11 @@ function ProductPhotoSlot({
         <span className="text-sm font-semibold text-zinc-100">
           {label}
         </span>
-        {view === "front" && (
+        {showRequired && view === "front" ? (
           <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-2 py-0.5 text-[11px] font-semibold text-lime-200">
             {t("frontRequired", lang)}
           </span>
-        )}
+        ) : null}
       </div>
       <label className="group relative block cursor-pointer overflow-hidden rounded-lg border border-dashed border-emerald-300/20 bg-[#050806] transition hover:border-lime-300/50 hover:bg-lime-300/[0.03]">
         {photo.dataUrl ? (
@@ -313,7 +320,7 @@ function ProductPhotoSlot({
                   onRemove(view);
                 }}
                 className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/75 text-white opacity-0 transition group-hover:opacity-100"
-                aria-label={`Remove ${label}`}
+                aria-label={removeAriaKey ? t(removeAriaKey, lang) : `Remove ${label}`}
                 title={t("removeAria", lang)}
               >
                 <X size={13} aria-hidden="true" />
@@ -337,6 +344,7 @@ function ProductPhotoSlot({
           type="file"
           accept="image/png,image/jpeg,image/webp"
           disabled={isBusy}
+          aria-label={replaceAriaKey ? t(replaceAriaKey, lang) : `Upload ${label}`}
           className="sr-only"
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -485,6 +493,13 @@ export default function EcommerceAssetsPage() {
     { view: "back", dataUrl: null, fileName: null },
   ]);
   const [readingView, setReadingView] = useState<EcommerceProductView | null>(null);
+  const [petPhotos, setPetPhotos] = useState<EcommerceProductPhotoSlot[]>([
+    { view: "front", dataUrl: null, fileName: null },
+    { view: "side", dataUrl: null, fileName: null },
+    { view: "back", dataUrl: null, fileName: null },
+  ]);
+  const [petReplacementEnabled, setPetReplacementEnabled] = useState(false);
+  const [petReadingView, setPetReadingView] = useState<EcommerceProductView | null>(null);
   const [manufacturerPromos, setManufacturerPromos] = useState<ManufacturerPromoImage[]>([]);
   const [isReadingManufacturerPromos, setIsReadingManufacturerPromos] = useState(false);
   const [imageResolution, setImageResolution] = useState<KieResolution>("1K");
@@ -504,12 +519,20 @@ export default function EcommerceAssetsPage() {
   const frontInputRef = useRef<HTMLInputElement | null>(null);
   const sideInputRef = useRef<HTMLInputElement | null>(null);
   const backInputRef = useRef<HTMLInputElement | null>(null);
+  const petFrontInputRef = useRef<HTMLInputElement | null>(null);
+  const petSideInputRef = useRef<HTMLInputElement | null>(null);
+  const petBackInputRef = useRef<HTMLInputElement | null>(null);
   const manufacturerInputRef = useRef<HTMLInputElement | null>(null);
 
   const inputRefs: Record<EcommerceProductView, React.RefObject<HTMLInputElement | null>> = {
     front: frontInputRef,
     side: sideInputRef,
     back: backInputRef,
+  };
+  const petInputRefs: Record<EcommerceProductView, React.RefObject<HTMLInputElement | null>> = {
+    front: petFrontInputRef,
+    side: petSideInputRef,
+    back: petBackInputRef,
   };
 
   const isBusy = status === "reading" || status === "starting" || status === "polling";
@@ -578,6 +601,38 @@ export default function EcommerceAssetsPage() {
     setJob(null);
   }
 
+  async function handlePetFile(view: EcommerceProductView, file: File) {
+    setPetReadingView(view);
+    setStatus("reading");
+    setError(null);
+    try {
+      const dataUrl = await readImageFile(file);
+      setPetPhotos((prev) =>
+        prev.map((p) =>
+          p.view === view ? { ...p, dataUrl, fileName: file.name } : p
+        )
+      );
+      setJob(null);
+      setStatus("idle");
+    } catch (fileError) {
+      setError(fileError instanceof Error ? fileError.message : t("errReadFailed", textLanguage));
+      setStatus("error");
+    } finally {
+      setPetReadingView(null);
+      const ref = petInputRefs[view];
+      if (ref.current) ref.current.value = "";
+    }
+  }
+
+  function removePetPhoto(view: EcommerceProductView) {
+    setPetPhotos((prev) =>
+      prev.map((p) =>
+        p.view === view ? { ...p, dataUrl: null, fileName: null } : p
+      )
+    );
+    setJob(null);
+  }
+
   function switchSourceMode(nextMode: EcommerceSourceMode) {
     if (isBusy || nextMode === sourceMode) return;
     setSourceMode(nextMode);
@@ -588,6 +643,12 @@ export default function EcommerceAssetsPage() {
     } else {
       setManufacturerPromos([]);
       setGenerationTargets(ALL_GENERATION_TARGETS);
+      setPetPhotos([
+        { view: "front", dataUrl: null, fileName: null },
+        { view: "side", dataUrl: null, fileName: null },
+        { view: "back", dataUrl: null, fileName: null },
+      ]);
+      setPetReplacementEnabled(false);
     }
   }
 
@@ -678,6 +739,14 @@ export default function EcommerceAssetsPage() {
       setError(t("errFrontRequired", textLanguage));
       return;
     }
+    if (
+      sourceMode === "manufacturer-promos"
+      && petReplacementEnabled
+      && (!petPhotos[0]?.dataUrl || !petPhotos[1]?.dataUrl || !petPhotos[2]?.dataUrl)
+    ) {
+      setError(t("petViewRequired", textLanguage));
+      return;
+    }
     setStatus("starting");
     setError(null);
     setJob(null);
@@ -686,6 +755,13 @@ export default function EcommerceAssetsPage() {
       .filter((p) => p.dataUrl)
       .map((p) => p.dataUrl!);
     const manufacturerPromoDataUrls = manufacturerPromos.map((image) => image.dataUrl);
+    const petPhotoPayload = sourceMode === "manufacturer-promos" && petReplacementEnabled
+      ? {
+          front: petPhotos[0]?.dataUrl ?? null,
+          side: petPhotos[1]?.dataUrl ?? null,
+          back: petPhotos[2]?.dataUrl ?? null,
+        }
+      : undefined;
 
     try {
       const response = await fetch("/api/ecommerce-assets/create", {
@@ -695,6 +771,8 @@ export default function EcommerceAssetsPage() {
           ? {
               sourceMode,
               manufacturerPromoDataUrls,
+              petPhotoDataUrls: petPhotoPayload,
+              petReplacementEnabled: sourceMode === "manufacturer-promos" ? petReplacementEnabled : false,
               customRequirements: customRequirements.trim() || undefined,
               textLanguage,
               imageResolution,
@@ -1053,7 +1131,7 @@ export default function EcommerceAssetsPage() {
               ) : (
                 <div className="grid gap-4 md:grid-cols-3">
                   {productPhotos.map((photo) => (
-                    <ProductPhotoSlot
+                    <PhotoUploadSlot
                       key={photo.view}
                       view={photo.view}
                       photo={photo}
@@ -1063,6 +1141,14 @@ export default function EcommerceAssetsPage() {
                       onUpload={handleFile}
                       onRemove={handleRemove}
                       inputRef={inputRefs[photo.view]}
+                      showRequired
+                      removeAriaKey={
+                        photo.view === "front"
+                          ? "removeAriaFront"
+                          : photo.view === "side"
+                            ? "removeAriaSide"
+                            : "removeAriaBack"
+                      }
                     />
                   ))}
                 </div>
@@ -1306,6 +1392,61 @@ export default function EcommerceAssetsPage() {
                   })}
                 </div>
               </SettingsGroup>
+
+              {sourceMode === "manufacturer-promos" ? (
+                <SettingsGroup
+                  icon={<PawPrint size={14} aria-hidden="true" />}
+                  label={t("petSectionTitle", textLanguage)}
+                >
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={petReplacementEnabled}
+                    disabled={isBusy}
+                    onClick={() => setPetReplacementEnabled((value) => !value)}
+                    className="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-zinc-100 transition hover:border-emerald-300/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span>{t("petToggleLabel", textLanguage)}</span>
+                    <span
+                      className={`flex h-6 w-11 items-center rounded-full p-0.5 transition ${petReplacementEnabled ? "bg-lime-300" : "bg-zinc-700"}`}
+                    >
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition ${petReplacementEnabled ? "translate-x-5" : "translate-x-0"}`}
+                      >
+                        {petReplacementEnabled ? <Check size={12} aria-hidden="true" className="text-zinc-900" /> : null}
+                      </span>
+                    </span>
+                  </button>
+                  {petReplacementEnabled ? (
+                    <div className="flex flex-col gap-2">
+                      <p className="text-[11px] leading-5 text-zinc-400">{t("petEmptyHint", textLanguage)}</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {petPhotos.map((photo) => (
+                          <PhotoUploadSlot
+                            key={photo.view}
+                            view={photo.view}
+                            photo={photo}
+                            isBusy={isBusy}
+                            readingView={petReadingView}
+                            lang={textLanguage}
+                            onUpload={handlePetFile}
+                            onRemove={removePetPhoto}
+                            inputRef={petInputRefs[photo.view]}
+                            replaceAriaKey={
+                              photo.view === "front"
+                                ? "petReplaceAriaFront"
+                                : photo.view === "side"
+                                  ? "petReplaceAriaSide"
+                                  : "petReplaceAriaBack"
+                            }
+                            removeAriaKey="petRemoveCta"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </SettingsGroup>
+              ) : null}
 
               {sourceMode !== "manufacturer-promos" ? (
                 <SettingsGroup icon={<Film size={14} aria-hidden="true" />} label={t("settingsVideo", textLanguage)}>
