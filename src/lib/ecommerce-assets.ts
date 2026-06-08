@@ -203,15 +203,15 @@ export function fallbackManufacturerPromoAnalysis(textLanguage: EcommerceTextLan
 export function getPetReplacementNote(lang: EcommerceTextLanguage): string {
   if (lang === "zh") {
     return [
-      "第一步:判断原图中是否真实出现了动物 / 宠物(实物或插画)。如果原图中没有任何动物,最终图里也不得出现任何动物,直接保留原图中的产品外观、包装、构图和文字。",
-      "如果原图中出现了动物,仅替换那只动物,使用用户提供的宠物参考照中的猫作为身份来源。替换时保留原动物所在位置、姿势、比例、视角和视线,不要把宠物放到产品本身上,不要覆盖产品,不要改变产品外观、材质、包装或品牌信息。",
-      "宠物参考照只用于替换原图中的动物,不要影响产品本身,也不要影响产品上的 logo、文字、角标、参数、装饰带等任何元素。",
+      "第一步:仔细看原图,只在原图中真实存在一只猫(照片里活体的、真实的猫,不是插画、不是卡通形象、不是 logo 上的小图、不是产品印花上的猫、不是品牌吉祥物)时,才进行替换。",
+      "其他情况一律不替换:原图里没有猫、有插画里的猫、有卡通猫、有其他动物(狗、兔子、鸟、鱼等)、有品牌吉祥物猫,都不要替换,最终图里也不得出现任何用户提供的猫,直接保留原图中的产品外观、包装、构图和文字。",
+      "如果确认要替换(原图里真实存在的猫),仅替换那只猫,使用用户提供的宠物参考照中的猫作为身份来源。替换时保留原猫所在位置、姿势、比例、视角和视线,不要把猫放到产品本身上,不要覆盖产品,不要改变产品外观、材质、包装或品牌信息。宠物参考照只用于替换原图中的真实猫,不要影响产品本身,也不要影响产品上的 logo、文字、角标、参数、装饰带等任何元素。",
     ].join(" ");
   }
   return [
-    "Step 1: Look at the source image and decide whether it actually contains an animal or pet (real or illustrated). If it does NOT contain any animal, do not introduce any animal in the final output — keep the product, packaging, composition, and text exactly as they appear in the source.",
-    "If the source image DOES contain an animal, replace only that animal with the cat shown in the user-provided pet reference photos. Preserve the original animal's position, pose, scale, viewpoint, and gaze. Do not place the pet on the product itself, do not cover the product, and do not change the product's appearance, materials, packaging, or any branding information.",
-    "The pet reference photos are used solely to replace the original animal. They must not alter the product, nor touch any logo, text, badge, spec, or decorative band on the product.",
+    "Step 1: Look carefully at the source image. Replacement only happens if the source image contains a real, photogenic cat (a living cat in the photo — not an illustration, not a cartoon cat, not a small cat in a logo, not a printed cat on the product, not a brand mascot).",
+    "In every other case, do not replace anything: if there is no cat, or there is an illustrated cat, or a cartoon cat, or any other animal (dog, rabbit, bird, fish, etc.), or a brand-mascot cat, keep the product, packaging, composition, and text exactly as they appear in the source. Do not introduce the user's cat in the final output.",
+    "If you confirm replacement is needed (a real cat is actually present in the source), replace only that cat with the cat shown in the user-provided pet reference photos. Preserve the original cat's position, pose, scale, viewpoint, and gaze. Do not place the pet on the product itself, do not cover the product, and do not change the product's appearance, materials, packaging, or any branding information. The pet reference photos are used solely to replace the real cat; they must not alter the product or touch any logo, text, badge, spec, or decorative band on the product.",
   ].join(" ");
 }
 

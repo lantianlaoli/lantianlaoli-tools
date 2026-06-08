@@ -806,12 +806,13 @@ test("manufacturer promo prompt appends the pet replacement note when provided",
 test("getPetReplacementNote returns language-specific text", () => {
   const en = getPetReplacementNote("en");
   const zh = getPetReplacementNote("zh");
-  assert.match(en, /Look at the source image and decide whether it actually contains an animal or pet/i);
-  assert.match(en, /do not introduce any animal in the final output/i);
-  assert.match(en, /do not place the pet on the product itself/i);
-  assert.match(zh, /判断原图中是否真实出现了动物 \/ 宠物/);
-  assert.match(zh, /最终图里也不得出现任何动物/);
-  assert.match(zh, /不要把宠物放到产品本身上/);
+  assert.match(en, /real, photogenic cat/i);
+  assert.match(en, /not an illustration, not a cartoon cat/i);
+  assert.match(en, /If there is no cat, or there is an illustrated cat/i);
+  assert.match(en, /Do not introduce the user's cat in the final output/i);
+  assert.match(zh, /真实存在一只猫/);
+  assert.match(zh, /不是插画、不是卡通形象、不是 logo 上的小图/);
+  assert.match(zh, /其他情况一律不替换/);
   assert.notEqual(en, zh);
 });
 
