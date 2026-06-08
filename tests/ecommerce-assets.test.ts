@@ -807,19 +807,25 @@ test("manufacturer promo prompt appends the pet replacement note when provided",
   // treats it as a high-priority instruction instead of trailing guidance.
   const head = prompt.split("\n").slice(0, 6).join("\n");
   assert.match(head, /ABSOLUTE PRIORITY RULE/);
-  assert.match(head, /real, photogenic cat/i);
+  assert.match(head, /real, living cat/i);
 });
 
 test("getPetReplacementNote returns language-specific text", () => {
   const en = getPetReplacementNote("en");
   const zh = getPetReplacementNote("zh");
-  assert.match(en, /real, photogenic cat/i);
-  assert.match(en, /not an illustration, not a cartoon cat/i);
-  assert.match(en, /If there is no cat, or there is an illustrated cat/i);
-  assert.match(en, /Do not introduce the user's cat in the final output/i);
-  assert.match(zh, /真实存在一只猫/);
-  assert.match(zh, /不是插画、不是卡通形象、不是 logo 上的小图/);
-  assert.match(zh, /其他情况一律不替换/);
+  assert.match(en, /real, living cat/i);
+  assert.match(en, /Treat the source image as containing one real, living cat/i);
+  assert.match(en, /Use the cat shown in the user-provided pet reference photos as the identity source/i);
+  assert.match(en, /Preserve the original cat's position, pose, scale, viewpoint, and gaze/i);
+  assert.match(en, /illustration, cartoon, printed graphic, or brand mascot/i);
+  assert.match(en, /non-cat animal/i);
+  assert.match(en, /the final image must not introduce the user's cat/i);
+  assert.match(zh, /原图中存在一只真实的、活体的猫/);
+  assert.match(zh, /用用户提供的宠物参考照中的猫作为身份来源/);
+  assert.match(zh, /保留原猫所在位置、姿势、比例、视角和视线/);
+  assert.match(zh, /插画、卡通形象、印花、品牌吉祥物/);
+  assert.match(zh, /不是猫而是其他动物/);
+  assert.match(zh, /最终图里也不得出现任何用户提供的猫/);
   assert.notEqual(en, zh);
 });
 
