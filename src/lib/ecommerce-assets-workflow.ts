@@ -1,8 +1,10 @@
 import {
+  analyzeManufacturerPromoForEcommerceAssets,
   analyzeProductForEcommerceAssets,
   buildEcommerceImagePrompts,
   buildEcommerceStoryboardPrompt,
   buildEcommerceVideoPrompt,
+  buildManufacturerPromoCarouselPrompt,
   fallbackEcommerceBrief,
 } from "./ecommerce-assets";
 import {
@@ -22,6 +24,7 @@ import type {
   EcommerceAssetsJob,
   EcommerceCreativeBrief,
   EcommerceImageSlot,
+  EcommerceSourceMode,
   EcommerceSlotStatus,
   EcommerceTextLanguage,
   KieAspectRatio,
@@ -37,6 +40,11 @@ export function normalizeEcommerceAssetScope(value: unknown): EcommerceAssetScop
 }
 
 const ALL_ASSET_SCOPE_OPTIONS: EcommerceAssetScopeOption[] = ["carousel", "detail", "video"];
+const MANUFACTURER_PROMO_LIMIT = 6;
+
+function normalizeSourceMode(value: unknown): EcommerceSourceMode {
+  return value === "manufacturer-promos" ? "manufacturer-promos" : "product-photos";
+}
 
 export function normalizeEcommerceAssetScopes(value: unknown, legacyScope?: unknown): EcommerceAssetScopeOption[] {
   if (Array.isArray(value)) {
@@ -125,8 +133,54 @@ async function createImageSlots(input: {
   };
 }
 
+async function createManufacturerPromoImageSlots(input: {
+  manufacturerPromoImageUrls: string[];
+  customRequirements?: string;
+  textLanguage: EcommerceTextLanguage;
+  imageResolution: KieResolution;
+  imageAspectRatio: KieAspectRatio;
+}) {
+  const callBackUrl = getKieCallbackUrl();
+  const results = await Promise.all(
+    input.manufacturerPromoImageUrls.map(async (imageUrl, index) => {
+      const analysis = await analyzeManufacturerPromoForEcommerceAssets(imageUrl, input.textLanguage);
+      const prompt = buildManufacturerPromoCarouselPrompt({
+        analysis,
+        customRequirements: input.customRequirements,
+        textLanguage: input.textLanguage,
+        sourceIndex: index,
+      });
+      const taskId = await createKieImageTask({
+        prompt,
+        inputUrls: [imageUrl],
+        aspectRatio: input.imageAspectRatio,
+        resolution: input.imageResolution,
+        callBackUrl,
+      });
+      const slot: EcommerceImageSlot = {
+        id: `manufacturer-carousel-${index + 1}`,
+        kind: "carousel",
+        index: index + 1,
+        sourceIndex: index,
+        title: input.textLanguage === "zh" ? `厂家图 ${index + 1}` : `Manufacturer Image ${index + 1}`,
+        taskId,
+        status: "waiting",
+        prompt,
+      };
+      return { slot, analysis };
+    })
+  );
+
+  return {
+    analyses: results.map((entry) => entry.analysis),
+    carouselImages: results.map((entry) => entry.slot),
+  };
+}
+
 export async function createEcommerceAssetsJob(input: {
   productPhotoDataUrls: string[];
+  sourceMode?: unknown;
+  manufacturerPromoDataUrls?: string[];
   customRequirements?: string;
   textLanguage?: unknown;
   imageResolution?: string;
@@ -137,7 +191,10 @@ export async function createEcommerceAssetsJob(input: {
   assetScopes?: unknown;
 }) {
   const textLanguage = normalizeEcommerceTextLanguage(input.textLanguage);
-  const assetScopes = normalizeEcommerceAssetScopes(input.assetScopes, input.assetScope);
+  const sourceMode = normalizeSourceMode(input.sourceMode);
+  const assetScopes = sourceMode === "manufacturer-promos"
+    ? (["carousel"] as EcommerceAssetScopeOption[])
+    : normalizeEcommerceAssetScopes(input.assetScopes, input.assetScope);
   const assetScope = primaryAssetScope(assetScopes);
   const imageResolution: KieResolution = ["1K", "2K", "4K"].includes(input.imageResolution ?? "")
     ? (input.imageResolution as KieResolution)
@@ -153,6 +210,7 @@ export async function createEcommerceAssetsJob(input: {
   const now = Date.now();
   let job: EcommerceAssetsJob = {
     id: jobId,
+    sourceMode,
     status: "preparing",
     assetScope,
     assetScopes,
@@ -171,6 +229,41 @@ export async function createEcommerceAssetsJob(input: {
   };
 
   try {
+    if (sourceMode === "manufacturer-promos") {
+      const promoDataUrls = (input.manufacturerPromoDataUrls ?? []).filter(Boolean);
+      if (promoDataUrls.length === 0) {
+        throw new Error("At least one manufacturerPromoDataUrl is required.");
+      }
+      if (promoDataUrls.length > MANUFACTURER_PROMO_LIMIT) {
+        throw new Error(`Upload up to ${MANUFACTURER_PROMO_LIMIT} manufacturer promo images.`);
+      }
+
+      const manufacturerPromoImageUrls = await Promise.all(
+        promoDataUrls.map((dataUrl, i) =>
+          uploadKieImage(dataUrl, `manufacturer-promo-${i + 1}-${jobId}.jpg`, "lantian-tools/ecommerce-manufacturer-promos")
+        )
+      );
+      const manufacturerSlots = await createManufacturerPromoImageSlots({
+        manufacturerPromoImageUrls,
+        customRequirements: input.customRequirements,
+        textLanguage,
+        imageResolution,
+        imageAspectRatio,
+      });
+
+      return {
+        ...job,
+        status: "processing",
+        imageResolution,
+        manufacturerPromoImageUrls,
+        manufacturerPromoAnalyses: manufacturerSlots.analyses,
+        carouselImages: manufacturerSlots.carouselImages,
+        detailImages: [],
+        video: { status: "waiting", prompt: "" },
+        updatedAt: Date.now(),
+      };
+    }
+
     const viewLabels = ["front", "side", "back"];
     const uploadResults = await Promise.all(
       input.productPhotoDataUrls.map((dataUrl, i) =>

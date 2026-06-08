@@ -2,6 +2,7 @@ import { callOpenRouter } from "./openrouter";
 import type {
   EcommerceCreativeBrief,
   EcommerceImageSlot,
+  EcommerceManufacturerPromoAnalysis,
   EcommerceTextLanguage,
 } from "./types";
 
@@ -68,6 +69,29 @@ function normalizeBrief(value: Partial<EcommerceCreativeBrief> | null, textLangu
   };
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())) : [];
+}
+
+function normalizeManufacturerPromoAnalysis(value: Partial<EcommerceManufacturerPromoAnalysis> | null): EcommerceManufacturerPromoAnalysis {
+  const hierarchy = (value?.visualHierarchy ?? {}) as Partial<EcommerceManufacturerPromoAnalysis["visualHierarchy"]>;
+  return {
+    productSubject: value?.productSubject || "the product shown in the manufacturer promotional image",
+    visualHierarchy: {
+      primaryText: hierarchy.primaryText || "",
+      secondaryText: stringArray(hierarchy.secondaryText),
+      specs: stringArray(hierarchy.specs),
+      badges: stringArray(hierarchy.badges),
+      logoText: stringArray(hierarchy.logoText),
+      decorativeText: stringArray(hierarchy.decorativeText),
+      layout: hierarchy.layout || "infer from the source image",
+    },
+    productVisuals: value?.productVisuals || "infer product shape, materials, color, and visible details from the source image",
+    keyMessages: stringArray(value?.keyMessages),
+    rewriteGuidance: value?.rewriteGuidance || "preserve the product and redesign the promotional image according to the user's requirements",
+  };
+}
+
 export async function analyzeProductForEcommerceAssets(
   productImageUrls: string[],
   textLanguage: EcommerceTextLanguage,
@@ -108,6 +132,72 @@ export async function analyzeProductForEcommerceAssets(
   const brief = normalizeBrief(response, textLanguage);
   if (customRequirements) brief.customRequirements = customRequirements;
   return brief;
+}
+
+export async function analyzeManufacturerPromoForEcommerceAssets(
+  imageUrl: string,
+  textLanguage: EcommerceTextLanguage
+): Promise<EcommerceManufacturerPromoAnalysis> {
+  const response = await callOpenRouter<Partial<EcommerceManufacturerPromoAnalysis>>(
+    [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: [
+              "Analyze this manufacturer promotional product image for an ecommerce carousel redesign workflow.",
+              "Return ONLY a JSON object (no markdown, no explanation) with:",
+              "productSubject, productVisuals, keyMessages, rewriteGuidance, and visualHierarchy.",
+              "visualHierarchy must include: primaryText, secondaryText, specs, badges, logoText, decorativeText, layout.",
+              "Extract text according to visual hierarchy, not as a flat OCR list. Distinguish main headline, subheadlines, parameter/spec text, badges, logo/brand marks, decorative text, and the overall layout structure.",
+              "Do not invent text that is not visible. Summarize visual product details needed to preserve the source product.",
+              textLanguage === "zh"
+                ? "Write explanatory fields in Simplified Chinese when useful, but preserve original visible text exactly inside hierarchy fields."
+                : "Write explanatory fields in English, but preserve original visible text exactly inside hierarchy fields.",
+            ].join("\n"),
+          },
+          { type: "image_url", image_url: { url: imageUrl } },
+        ],
+      },
+    ]
+  );
+  return normalizeManufacturerPromoAnalysis(response);
+}
+
+export function buildManufacturerPromoCarouselPrompt(input: {
+  analysis: EcommerceManufacturerPromoAnalysis;
+  customRequirements?: string;
+  textLanguage: EcommerceTextLanguage;
+  sourceIndex: number;
+}) {
+  const hierarchy = input.analysis.visualHierarchy;
+  const customRequirements = input.customRequirements?.trim()
+    || (input.textLanguage === "zh"
+      ? "重新设计为干净、高级、适合电商轮播图的视觉风格。"
+      : "Redesign into a clean premium ecommerce carousel style.");
+
+  return [
+    "Create one redesigned ecommerce carousel image using the uploaded manufacturer promotional image as the source reference.",
+    `Source image number: ${input.sourceIndex + 1}.`,
+    "Use image-to-image mode. Preserve the real product identity, shape, materials, proportions, colors, packaging, logo placement if present, and recognizable details from the source image.",
+    "Do not copy the original crowded layout. Rebuild the visual composition according to the user's style and copy-selection requirements.",
+    `Product subject: ${input.analysis.productSubject}.`,
+    `Product visuals to preserve: ${input.analysis.productVisuals}.`,
+    `Key messages extracted from source: ${input.analysis.keyMessages.join("; ") || "infer from the source image"}.`,
+    "视觉层级解析 / Visual hierarchy extracted from source:",
+    `- Main headline / 主标题: ${hierarchy.primaryText || "none detected"}`,
+    `- Secondary text / 副标题: ${hierarchy.secondaryText.join("; ") || "none detected"}`,
+    `- Specs / 参数: ${hierarchy.specs.join("; ") || "none detected"}`,
+    `- Badges / 角标: ${hierarchy.badges.join("; ") || "none detected"}`,
+    `- Logo or brand text / logo或品牌字样: ${hierarchy.logoText.join("; ") || "none detected"}`,
+    `- Decorative text / 装饰性文字: ${hierarchy.decorativeText.join("; ") || "none detected"}`,
+    `- Layout / 版式结构: ${hierarchy.layout}`,
+    `Rewrite guidance from analysis: ${input.analysis.rewriteGuidance}.`,
+    `User style and copy-selection requirements (MUST follow): ${customRequirements}`,
+    languageInstruction(input.textLanguage),
+    "Keep the final image clean, premium, legible, and product-led. Avoid dense copy, fake certifications, fake logos, watermarks, QR codes, prices, and unrelated props.",
+  ].join("\n");
 }
 
 function viewReferenceNote(numViews: number) {

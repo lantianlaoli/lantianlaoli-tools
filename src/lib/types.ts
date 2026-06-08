@@ -74,6 +74,7 @@ export type EcommerceAssetScopeOption = Exclude<EcommerceAssetScope, "all">;
 export type EcommerceSlotStatus = "waiting" | "processing" | "success" | "fail";
 
 export type EcommerceProductView = "front" | "side" | "back";
+export type EcommerceSourceMode = "product-photos" | "manufacturer-promos";
 
 export type EcommerceProductPhotoSlot = {
   view: EcommerceProductView;
@@ -97,12 +98,31 @@ export type EcommerceImageSlot = {
   id: string;
   kind: Extract<EcommerceAssetKind, "carousel" | "detail">;
   index: number;
+  sourceIndex?: number;
   title: string;
   taskId: string;
   status: EcommerceSlotStatus;
   resultUrl?: string;
   error?: string;
   prompt: string;
+};
+
+export type EcommerceManufacturerPromoVisualHierarchy = {
+  primaryText: string;
+  secondaryText: string[];
+  specs: string[];
+  badges: string[];
+  logoText: string[];
+  decorativeText: string[];
+  layout: string;
+};
+
+export type EcommerceManufacturerPromoAnalysis = {
+  productSubject: string;
+  visualHierarchy: EcommerceManufacturerPromoVisualHierarchy;
+  productVisuals: string;
+  keyMessages: string[];
+  rewriteGuidance: string;
 };
 
 export type EcommerceVideoSlot = {
@@ -117,6 +137,7 @@ export type EcommerceVideoSlot = {
 
 export type EcommerceAssetsJob = {
   id: string;
+  sourceMode?: EcommerceSourceMode;
   status: "preparing" | "processing" | "completed" | "failed";
   assetScope?: EcommerceAssetScope;
   assetScopes?: EcommerceAssetScopeOption[];
@@ -127,6 +148,8 @@ export type EcommerceAssetsJob = {
   videoAspectRatio?: string;
   productImageUrl?: string;
   productImageUrls?: string[];
+  manufacturerPromoImageUrls?: string[];
+  manufacturerPromoAnalyses?: EcommerceManufacturerPromoAnalysis[];
   brief?: EcommerceCreativeBrief;
   customRequirements?: string;
   carouselImages: EcommerceImageSlot[];

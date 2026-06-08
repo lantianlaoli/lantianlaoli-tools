@@ -37,7 +37,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Image slot prompt is required." }, { status: 400 });
     }
 
-    const productImageUrls = job.productImageUrls?.length ? job.productImageUrls : job.productImageUrl ? [job.productImageUrl] : [];
+    const productImageUrls = job.sourceMode === "manufacturer-promos"
+      ? typeof slot.sourceIndex === "number" && job.manufacturerPromoImageUrls?.[slot.sourceIndex]
+        ? [job.manufacturerPromoImageUrls[slot.sourceIndex]]
+        : []
+      : job.productImageUrls?.length
+        ? job.productImageUrls
+        : job.productImageUrl
+          ? [job.productImageUrl]
+          : [];
     if (!productImageUrls.length) {
       return NextResponse.json({ error: "Product image URLs are required." }, { status: 400 });
     }

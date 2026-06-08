@@ -7,8 +7,10 @@ export const maxDuration = 300;
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
+      sourceMode?: unknown;
       productPhotoDataUrls?: string[];
       productPhotoDataUrl?: string;
+      manufacturerPromoDataUrls?: string[];
       customRequirements?: string;
       textLanguage?: unknown;
       imageResolution?: string;
@@ -18,6 +20,7 @@ export async function POST(request: Request) {
       assetScope?: unknown;
       assetScopes?: unknown;
     };
+    const sourceMode = body.sourceMode === "manufacturer-promos" ? "manufacturer-promos" : "product-photos";
 
     const productPhotoDataUrls = body.productPhotoDataUrls && body.productPhotoDataUrls.length > 0
       ? body.productPhotoDataUrls
@@ -26,12 +29,22 @@ export async function POST(request: Request) {
         : [];
 
     const validUrls = productPhotoDataUrls.filter(Boolean);
-    if (validUrls.length === 0) {
+    const manufacturerPromoDataUrls = (body.manufacturerPromoDataUrls ?? []).filter(Boolean);
+    if (sourceMode === "manufacturer-promos") {
+      if (manufacturerPromoDataUrls.length === 0) {
+        return NextResponse.json({ error: "At least one manufacturerPromoDataUrl is required." }, { status: 400 });
+      }
+      if (manufacturerPromoDataUrls.length > 6) {
+        return NextResponse.json({ error: "Upload up to 6 manufacturer promo images." }, { status: 400 });
+      }
+    } else if (validUrls.length === 0) {
       return NextResponse.json({ error: "At least one productPhotoDataUrl is required." }, { status: 400 });
     }
 
     const job = await createEcommerceAssetsJob({
+      sourceMode,
       productPhotoDataUrls: validUrls,
+      manufacturerPromoDataUrls,
       customRequirements: body.customRequirements,
       textLanguage: body.textLanguage,
       imageResolution: body.imageResolution,
