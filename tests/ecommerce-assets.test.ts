@@ -934,8 +934,8 @@ test("getDefaultRequirementPhrases returns language-specific defaults (no Chines
   const zh = getDefaultRequirementPhrases("zh");
   const en = getDefaultRequirementPhrases("en");
 
-  assert.ok(zh.length > 0, "zh defaults should not be empty");
-  assert.ok(en.length > 0, "en defaults should not be empty");
+  assert.equal(zh.length, 1, "zh defaults should be exactly the Apple-style template");
+  assert.equal(en.length, 1, "en defaults should be exactly the Apple-style template");
 
   for (const phrase of en) {
     assert.doesNotMatch(phrase, /[一-鿿]/, `English default must not contain CJK: ${phrase}`);
