@@ -1,19 +1,45 @@
+import type { EcommerceTextLanguage } from "./types";
+
 export const REQUIREMENT_PHRASES_STORAGE_KEY = "lantian-tools:ecommerce-requirement-phrases";
 export const LEGACY_REQUIREMENT_PHRASES_STORAGE_KEY = "rivora:ecommerce-requirement-phrases";
 
-const LEGACY_CAROUSEL_NO_TEXT_PHRASE = "轮播图不要出现产品本身之外的文字、引导说明、箭头或标签";
-const SPLIT_CAROUSEL_NO_TEXT_PHRASES = [
+const ZH_LEGACY_CAROUSEL_NO_TEXT_PHRASE = "轮播图不要出现产品本身之外的文字、引导说明、箭头或标签";
+const ZH_SPLIT_CAROUSEL_NO_TEXT_PHRASES = [
   "轮播图不要出现产品本身之外的文字",
   "轮播图不要出现引导说明、箭头或标签",
 ];
 
-export const DEFAULT_REQUIREMENT_PHRASES = [
-  ...SPLIT_CAROUSEL_NO_TEXT_PHRASES,
-  "画面保持极简高级，减少装饰元素",
-  "不要出现价格、促销角标、二维码、水印",
-  "突出产品真实材质和细节，不改变产品外观",
-  "视频里尽量少文字，只保留必要中文卖点",
+const EN_LEGACY_CAROUSEL_NO_TEXT_PHRASE = "Carousel images must not include text, calls-to-action, arrows, or labels beyond the product itself";
+const EN_SPLIT_CAROUSEL_NO_TEXT_PHRASES = [
+  "Carousel images must not include text beyond the product itself",
+  "Carousel images must not include calls-to-action, arrows, or labels",
 ];
+
+const LEGACY_CAROUSEL_NO_TEXT_BY_LANG: Record<EcommerceTextLanguage, { legacy: string; split: string[] }> = {
+  zh: { legacy: ZH_LEGACY_CAROUSEL_NO_TEXT_PHRASE, split: ZH_SPLIT_CAROUSEL_NO_TEXT_PHRASES },
+  en: { legacy: EN_LEGACY_CAROUSEL_NO_TEXT_PHRASE, split: EN_SPLIT_CAROUSEL_NO_TEXT_PHRASES },
+};
+
+const DEFAULT_REQUIREMENT_PHRASES_BY_LANG: Record<EcommerceTextLanguage, string[]> = {
+  zh: [
+    ...ZH_SPLIT_CAROUSEL_NO_TEXT_PHRASES,
+    "画面保持极简高级，减少装饰元素",
+    "不要出现价格、促销角标、二维码、水印",
+    "突出产品真实材质和细节，不改变产品外观",
+    "视频里尽量少文字，只保留必要中文卖点",
+  ],
+  en: [
+    ...EN_SPLIT_CAROUSEL_NO_TEXT_PHRASES,
+    "Keep the look minimal and premium — no decorative clutter",
+    "No prices, promo badges, QR codes, or watermarks",
+    "Highlight real materials and details without altering the product",
+    "Keep video copy minimal — only the necessary selling points",
+  ],
+};
+
+export function getDefaultRequirementPhrases(lang: EcommerceTextLanguage): string[] {
+  return [...DEFAULT_REQUIREMENT_PHRASES_BY_LANG[lang]];
+}
 
 type ParsedRequirementPhrases = {
   phrases: string[];
@@ -24,8 +50,9 @@ function cleanPhrase(value: string) {
   return value.trim();
 }
 
-function normalizePhraseList(value: unknown): string[] {
+function normalizePhraseList(value: unknown, lang: EcommerceTextLanguage): string[] {
   if (!Array.isArray(value)) return [];
+  const { legacy, split } = LEGACY_CAROUSEL_NO_TEXT_BY_LANG[lang];
   const seen = new Set<string>();
   const normalized: string[] = [];
 
@@ -33,7 +60,7 @@ function normalizePhraseList(value: unknown): string[] {
     if (typeof item !== "string") continue;
     const phrase = cleanPhrase(item);
     if (!phrase) continue;
-    const phrases = phrase === LEGACY_CAROUSEL_NO_TEXT_PHRASE ? SPLIT_CAROUSEL_NO_TEXT_PHRASES : [phrase];
+    const phrases = phrase === legacy ? split : [phrase];
     for (const nextPhrase of phrases) {
       if (seen.has(nextPhrase)) continue;
       seen.add(nextPhrase);
@@ -44,38 +71,39 @@ function normalizePhraseList(value: unknown): string[] {
   return normalized;
 }
 
-function hasLegacyPhrase(value: unknown) {
-  return Array.isArray(value) && value.some((item) => typeof item === "string" && cleanPhrase(item) === LEGACY_CAROUSEL_NO_TEXT_PHRASE);
+function hasLegacyPhrase(value: unknown, lang: EcommerceTextLanguage) {
+  const { legacy } = LEGACY_CAROUSEL_NO_TEXT_BY_LANG[lang];
+  return Array.isArray(value) && value.some((item) => typeof item === "string" && cleanPhrase(item) === legacy);
 }
 
-export function parseStoredRequirementPhrases(raw: string | null): ParsedRequirementPhrases {
+export function parseStoredRequirementPhrases(raw: string | null, lang: EcommerceTextLanguage): ParsedRequirementPhrases {
   if (!raw) {
-    return { phrases: DEFAULT_REQUIREMENT_PHRASES, shouldPersist: true };
+    return { phrases: getDefaultRequirementPhrases(lang), shouldPersist: true };
   }
 
   try {
     const stored = JSON.parse(raw);
-    const parsed = normalizePhraseList(stored);
+    const parsed = normalizePhraseList(stored, lang);
     if (!parsed.length) {
-      return { phrases: DEFAULT_REQUIREMENT_PHRASES, shouldPersist: true };
+      return { phrases: getDefaultRequirementPhrases(lang), shouldPersist: true };
     }
-    return { phrases: parsed, shouldPersist: hasLegacyPhrase(stored) };
+    return { phrases: parsed, shouldPersist: hasLegacyPhrase(stored, lang) };
   } catch {
-    return { phrases: DEFAULT_REQUIREMENT_PHRASES, shouldPersist: true };
+    return { phrases: getDefaultRequirementPhrases(lang), shouldPersist: true };
   }
 }
 
-export function readStoredRequirementPhrases(storage: Storage): ParsedRequirementPhrases {
+export function readStoredRequirementPhrases(storage: Storage, lang: EcommerceTextLanguage): ParsedRequirementPhrases {
   const current = storage.getItem(REQUIREMENT_PHRASES_STORAGE_KEY);
-  if (current) return parseStoredRequirementPhrases(current);
+  if (current) return parseStoredRequirementPhrases(current, lang);
 
   const legacy = storage.getItem(LEGACY_REQUIREMENT_PHRASES_STORAGE_KEY);
   if (legacy) {
     storage.setItem(REQUIREMENT_PHRASES_STORAGE_KEY, legacy);
-    return parseStoredRequirementPhrases(legacy);
+    return parseStoredRequirementPhrases(legacy, lang);
   }
 
-  return parseStoredRequirementPhrases(null);
+  return parseStoredRequirementPhrases(null, lang);
 }
 
 export function appendRequirementPhrase(current: string, phrase: string) {

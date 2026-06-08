@@ -32,6 +32,7 @@ import {
   addRequirementPhrase,
   appendRequirementPhrase,
   deleteRequirementPhrase,
+  getDefaultRequirementPhrases,
   parseStoredRequirementPhrases,
   readStoredRequirementPhrases,
   REQUIREMENT_PHRASES_STORAGE_KEY,
@@ -80,8 +81,8 @@ function initialTextLanguage(): EcommerceTextLanguage {
     : readStoredEcommerceTextLanguage(window.localStorage);
 }
 
-function initialRequirementPhrases() {
-  return parseStoredRequirementPhrases(null).phrases;
+function initialRequirementPhrases(lang: EcommerceTextLanguage) {
+  return getDefaultRequirementPhrases(lang);
 }
 
 function statusLabel(status: EcommerceSlotStatus, lang: EcommerceTextLanguage) {
@@ -469,7 +470,7 @@ export default function EcommerceAssetsPage() {
   const [sourceMode, setSourceMode] = useState<EcommerceSourceMode>("product-photos");
   const [textLanguage, setTextLanguage] = useState<EcommerceTextLanguage>(initialTextLanguage);
   const [customRequirements, setCustomRequirements] = useState("");
-  const [requirementPhrases, setRequirementPhrases] = useState<string[]>(initialRequirementPhrases);
+  const [requirementPhrases, setRequirementPhrases] = useState<string[]>(() => initialRequirementPhrases(textLanguage));
   const [requirementPhrasesLoaded, setRequirementPhrasesLoaded] = useState(false);
   const [isAddingPhrase, setIsAddingPhrase] = useState(false);
   const [newPhraseDraft, setNewPhraseDraft] = useState("");
@@ -904,7 +905,7 @@ export default function EcommerceAssetsPage() {
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const parsed = readStoredRequirementPhrases(window.localStorage);
+      const parsed = readStoredRequirementPhrases(window.localStorage, textLanguage);
       setRequirementPhrases(parsed.phrases);
       setRequirementPhrasesLoaded(true);
       if (parsed.shouldPersist) {
@@ -912,7 +913,7 @@ export default function EcommerceAssetsPage() {
       }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, []);
+  }, [textLanguage]);
 
   useEffect(() => {
     if (!requirementPhrasesLoaded) return;
