@@ -178,6 +178,27 @@ const STRINGS = {
   petReplaceAriaSide: { zh: "替换侧视图", en: "Replace side view" },
   petReplaceAriaBack: { zh: "替换背视图", en: "Replace back view" },
 
+  // Brand logo watermark (manufacturer-promo mode only)
+  brandLogoSectionTitle: { zh: "品牌标识", en: "Brand Logo" },
+  brandLogoToggleLabel: { zh: "启用品牌标识", en: "Enable brand logo" },
+  brandLogoUploadCta: { zh: "上传品牌标识", en: "Upload brand logo" },
+  brandLogoReplaceCta: { zh: "替换品牌标识", en: "Replace brand logo" },
+  brandLogoRemoveCta: { zh: "移除品牌标识", en: "Remove brand logo" },
+  brandLogoUploadAria: { zh: "上传品牌标识", en: "Upload brand logo" },
+  brandLogoCornerLabel: { zh: "角位", en: "Corner" },
+  brandLogoCornerTopLeft: { zh: "左上", en: "Top Left" },
+  brandLogoCornerTopRight: { zh: "右上", en: "Top Right" },
+  brandLogoCornerBottomLeft: { zh: "左下", en: "Bottom Left" },
+  brandLogoCornerBottomRight: { zh: "右下", en: "Bottom Right" },
+  brandLogoMarginHint: {
+    zh: "标识会以统一间距贴在该角，应用于所有生成的图片。",
+    en: "The logo is placed at the same corner with a uniform margin on every generated image.",
+  },
+  brandLogoUploadRequired: {
+    zh: "启用品牌标识时需要先上传一张标识图片。",
+    en: "Upload a brand logo before enabling it.",
+  },
+
   // Results section
   resultsTitle: { zh: "生成结果", en: "Results" },
   resultsKicker: { zh: "生成结果", en: "Results" },

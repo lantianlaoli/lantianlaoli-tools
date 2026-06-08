@@ -54,7 +54,16 @@ export async function POST(request: Request) {
       && job.petReplacement?.petImageUrls?.length === 3
       ? job.petReplacement.petImageUrls
       : [];
-    const inputUrls = [...productImageUrls, ...petImageUrls];
+    const brandLogoUrl = job.sourceMode === "manufacturer-promos"
+      && job.brandLogo?.enabled
+      && job.brandLogo.logoImageUrl
+      ? job.brandLogo.logoImageUrl
+      : "";
+    const inputUrls = [
+      ...productImageUrls,
+      ...(brandLogoUrl ? [brandLogoUrl] : []),
+      ...petImageUrls,
+    ];
 
     const taskId = await createKieImageTask({
       prompt: slot.prompt,

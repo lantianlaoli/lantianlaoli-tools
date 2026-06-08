@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import {
+  ArrowDownLeft,
+  ArrowDownRight,
   ArrowLeft,
+  ArrowUpLeft,
+  ArrowUpRight,
   BadgeCheck,
   Check,
   Download,
@@ -18,6 +22,7 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
+  Stamp,
   Trash2,
   Upload,
   X,
@@ -43,6 +48,7 @@ import type {
   EcommerceAssetsJob,
   EcommerceAssetScopeOption,
   EcommerceImageSlot,
+  EcommerceLogoCorner,
   EcommerceProductPhotoSlot,
   EcommerceProductView,
   EcommerceSourceMode,
@@ -70,6 +76,13 @@ const VIEW_META: Record<EcommerceProductView, { key: "viewFront" | "viewSide" | 
   front: { key: "viewFront" },
   side: { key: "viewSide" },
   back: { key: "viewBack" },
+};
+
+const LOGO_CORNER_META: Record<EcommerceLogoCorner, { key: "brandLogoCornerTopLeft" | "brandLogoCornerTopRight" | "brandLogoCornerBottomLeft" | "brandLogoCornerBottomRight"; Icon: typeof ArrowUpLeft }> = {
+  "top-left": { key: "brandLogoCornerTopLeft", Icon: ArrowUpLeft },
+  "top-right": { key: "brandLogoCornerTopRight", Icon: ArrowUpRight },
+  "bottom-left": { key: "brandLogoCornerBottomLeft", Icon: ArrowDownLeft },
+  "bottom-right": { key: "brandLogoCornerBottomRight", Icon: ArrowDownRight },
 };
 
 function initialTextLanguage(): EcommerceTextLanguage {
@@ -500,6 +513,11 @@ export default function EcommerceAssetsPage() {
   ]);
   const [petReplacementEnabled, setPetReplacementEnabled] = useState(false);
   const [petReadingView, setPetReadingView] = useState<EcommerceProductView | null>(null);
+  const [brandLogoDataUrl, setBrandLogoDataUrl] = useState<string | null>(null);
+  const [brandLogoFileName, setBrandLogoFileName] = useState<string | null>(null);
+  const [brandLogoEnabled, setBrandLogoEnabled] = useState(false);
+  const [brandLogoCorner, setBrandLogoCorner] = useState<EcommerceLogoCorner>("top-left");
+  const [isReadingBrandLogo, setIsReadingBrandLogo] = useState(false);
   const [manufacturerPromos, setManufacturerPromos] = useState<ManufacturerPromoImage[]>([]);
   const [isReadingManufacturerPromos, setIsReadingManufacturerPromos] = useState(false);
   const [imageResolution, setImageResolution] = useState<KieResolution>("1K");
@@ -522,6 +540,7 @@ export default function EcommerceAssetsPage() {
   const petFrontInputRef = useRef<HTMLInputElement | null>(null);
   const petSideInputRef = useRef<HTMLInputElement | null>(null);
   const petBackInputRef = useRef<HTMLInputElement | null>(null);
+  const brandLogoInputRef = useRef<HTMLInputElement | null>(null);
   const manufacturerInputRef = useRef<HTMLInputElement | null>(null);
 
   const inputRefs: Record<EcommerceProductView, React.RefObject<HTMLInputElement | null>> = {
@@ -633,6 +652,31 @@ export default function EcommerceAssetsPage() {
     setJob(null);
   }
 
+  async function handleBrandLogoFile(file: File) {
+    setIsReadingBrandLogo(true);
+    setStatus("reading");
+    setError(null);
+    try {
+      const dataUrl = await readImageFile(file);
+      setBrandLogoDataUrl(dataUrl);
+      setBrandLogoFileName(file.name);
+      setJob(null);
+      setStatus("idle");
+    } catch (fileError) {
+      setError(fileError instanceof Error ? fileError.message : t("errReadFailed", textLanguage));
+      setStatus("error");
+    } finally {
+      setIsReadingBrandLogo(false);
+      if (brandLogoInputRef.current) brandLogoInputRef.current.value = "";
+    }
+  }
+
+  function removeBrandLogo() {
+    setBrandLogoDataUrl(null);
+    setBrandLogoFileName(null);
+    setJob(null);
+  }
+
   function switchSourceMode(nextMode: EcommerceSourceMode) {
     if (isBusy || nextMode === sourceMode) return;
     setSourceMode(nextMode);
@@ -649,6 +693,9 @@ export default function EcommerceAssetsPage() {
         { view: "back", dataUrl: null, fileName: null },
       ]);
       setPetReplacementEnabled(false);
+      setBrandLogoDataUrl(null);
+      setBrandLogoFileName(null);
+      setBrandLogoEnabled(false);
     }
   }
 
@@ -747,6 +794,10 @@ export default function EcommerceAssetsPage() {
       setError(t("petViewRequired", textLanguage));
       return;
     }
+    if (sourceMode === "manufacturer-promos" && brandLogoEnabled && !brandLogoDataUrl) {
+      setError(t("brandLogoUploadRequired", textLanguage));
+      return;
+    }
     setStatus("starting");
     setError(null);
     setJob(null);
@@ -773,6 +824,9 @@ export default function EcommerceAssetsPage() {
               manufacturerPromoDataUrls,
               petPhotoDataUrls: petPhotoPayload,
               petReplacementEnabled: sourceMode === "manufacturer-promos" ? petReplacementEnabled : false,
+              brandLogoDataUrl: brandLogoEnabled ? brandLogoDataUrl : null,
+              brandLogoEnabled: sourceMode === "manufacturer-promos" ? brandLogoEnabled : false,
+              brandLogoCorner: sourceMode === "manufacturer-promos" ? brandLogoCorner : undefined,
               customRequirements: customRequirements.trim() || undefined,
               textLanguage,
               imageResolution,
@@ -1442,6 +1496,132 @@ export default function EcommerceAssetsPage() {
                             removeAriaKey="petRemoveCta"
                           />
                         ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </SettingsGroup>
+              ) : null}
+
+              {sourceMode === "manufacturer-promos" ? (
+                <SettingsGroup
+                  icon={<Stamp size={14} aria-hidden="true" />}
+                  label={t("brandLogoSectionTitle", textLanguage)}
+                >
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={brandLogoEnabled}
+                    disabled={isBusy}
+                    onClick={() => setBrandLogoEnabled((value) => !value)}
+                    className="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-zinc-100 transition hover:border-emerald-300/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span>{t("brandLogoToggleLabel", textLanguage)}</span>
+                    <span
+                      className={`flex h-6 w-11 items-center rounded-full p-0.5 transition ${brandLogoEnabled ? "bg-lime-300" : "bg-zinc-700"}`}
+                    >
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition ${brandLogoEnabled ? "translate-x-5" : "translate-x-0"}`}
+                      >
+                        {brandLogoEnabled ? <Check size={12} aria-hidden="true" className="text-zinc-900" /> : null}
+                      </span>
+                    </span>
+                  </button>
+                  {brandLogoEnabled ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="rounded-lg border border-dashed border-emerald-300/20 bg-[#050806] p-3">
+                        {brandLogoDataUrl ? (
+                          <div className="flex items-center gap-3">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={brandLogoDataUrl}
+                              alt={t("brandLogoUploadAria", textLanguage)}
+                              className="h-20 w-20 shrink-0 rounded-md border border-white/10 bg-white object-contain p-1"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs text-zinc-300" title={brandLogoFileName ?? ""}>
+                                {brandLogoFileName}
+                              </p>
+                              <div className="mt-2 flex items-center gap-2">
+                                <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-emerald-300/15 bg-emerald-300/[0.06] px-2.5 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.12]">
+                                  <RefreshCw size={12} aria-hidden="true" />
+                                  {t("brandLogoReplaceCta", textLanguage)}
+                                  <input
+                                    ref={brandLogoInputRef}
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp"
+                                    disabled={isBusy || isReadingBrandLogo}
+                                    className="sr-only"
+                                    onChange={(event) => {
+                                      const file = event.target.files?.[0];
+                                      if (file) handleBrandLogoFile(file);
+                                    }}
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={removeBrandLogo}
+                                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 text-[11px] font-semibold text-zinc-200 transition hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                  aria-label={t("brandLogoRemoveCta", textLanguage)}
+                                >
+                                  <X size={12} aria-hidden="true" />
+                                  {t("brandLogoRemoveCta", textLanguage)}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <label className="flex aspect-[3/1] cursor-pointer flex-col items-center justify-center gap-2 text-zinc-500 transition hover:text-zinc-300">
+                            {isReadingBrandLogo ? (
+                              <Loader2 size={22} aria-hidden="true" className="animate-spin" />
+                            ) : (
+                              <Upload size={22} aria-hidden="true" />
+                            )}
+                            <span className="text-sm font-medium">
+                              {isReadingBrandLogo
+                                ? t("readingLabel", textLanguage)
+                                : t("brandLogoUploadCta", textLanguage)}
+                            </span>
+                            <input
+                              ref={brandLogoInputRef}
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              disabled={isBusy || isReadingBrandLogo}
+                              aria-label={t("brandLogoUploadAria", textLanguage)}
+                              className="sr-only"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                if (file) handleBrandLogoFile(file);
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[11px] font-semibold text-zinc-400">{t("brandLogoCornerLabel", textLanguage)}</span>
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {(Object.keys(LOGO_CORNER_META) as EcommerceLogoCorner[]).map((corner) => {
+                            const meta = LOGO_CORNER_META[corner];
+                            const Icon = meta.Icon;
+                            const active = brandLogoCorner === corner;
+                            return (
+                              <button
+                                key={corner}
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => setBrandLogoCorner(corner)}
+                                className={`flex h-10 items-center justify-center gap-1.5 rounded-md border text-[11px] font-semibold transition ${segmentedButtonClass(active, isBusy)}`}
+                                aria-pressed={active}
+                                aria-label={t(meta.key, textLanguage)}
+                                title={t(meta.key, textLanguage)}
+                              >
+                                <Icon size={14} aria-hidden="true" />
+                                <span className="hidden sm:inline">{t(meta.key, textLanguage)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="mt-1 text-[11px] leading-5 text-zinc-400">{t("brandLogoMarginHint", textLanguage)}</p>
                       </div>
                     </div>
                   ) : null}

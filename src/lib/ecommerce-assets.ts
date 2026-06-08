@@ -2,6 +2,7 @@ import { callOpenRouter } from "./openrouter";
 import type {
   EcommerceCreativeBrief,
   EcommerceImageSlot,
+  EcommerceLogoCorner,
   EcommerceManufacturerPromoAnalysis,
   EcommerceTextLanguage,
 } from "./types";
@@ -200,6 +201,40 @@ export function fallbackManufacturerPromoAnalysis(textLanguage: EcommerceTextLan
   };
 }
 
+export const BRAND_LOGO_MARGIN_PERCENT = 8;
+
+export function getBrandLogoNote(lang: EcommerceTextLanguage, corner: EcommerceLogoCorner): string {
+  const margin = `${BRAND_LOGO_MARGIN_PERCENT}%`;
+  const cornerLabelZh: Record<EcommerceLogoCorner, string> = {
+    "top-left": "左上角",
+    "top-right": "右上角",
+    "bottom-left": "左下角",
+    "bottom-right": "右下角",
+  };
+  const cornerLabelEn: Record<EcommerceLogoCorner, string> = {
+    "top-left": "TOP-LEFT corner",
+    "top-right": "TOP-RIGHT corner",
+    "bottom-left": "BOTTOM-LEFT corner",
+    "bottom-right": "BOTTOM-RIGHT corner",
+  };
+  if (lang === "zh") {
+    return [
+      `第一步:把参考图中的品牌标识复刻到生成图里(保持其标志、文字、颜色和整体风格,让标识和参考图视觉一致),然后放置在【${cornerLabelZh[corner]}】。`,
+      `第二步:标识距离${corner === "top-left" || corner === "top-right" ? "上" : "下"}边和${corner === "top-left" || corner === "bottom-left" ? "左" : "右"}边各 ${margin}(按图片短边计算),四舍五入即可。`,
+      `第三步:这个角位和这个 ${margin} 间距必须用在每一张轮播图上,确保整套图的品牌标识位置完全一致。`,
+      `第四步:标识不得遮挡产品、主标题、卖点文字、参数或装饰带;若发生冲突,优先让产品/文案完整,再让标识自然贴在该角;标识要足够小而精致,不能压过产品。`,
+      `第五步:如果原图本身已经有任何其他 logo、品牌名、品牌印章或水印,优先保留原图的元素并按原图风格缩放,品牌标识放在【${cornerLabelZh[corner]}】,不得叠加或替换原图的品牌元素。`,
+    ].join(" ");
+  }
+  return [
+    `Step 1: Recreate the brand logo shown in the reference image in the final image (preserve the mark, wordmark, color, and overall style so the logo reads as the same brand), then place it in the ${cornerLabelEn[corner]}.`,
+    `Step 2: The margin from the ${corner === "top-left" || corner === "top-right" ? "top" : "bottom"} edge and the ${corner === "top-left" || corner === "bottom-left" ? "left" : "right"} edge must be exactly ${margin} of the image's shorter side.`,
+    `Step 3: This exact corner and exact ${margin} margin MUST be used for every image in the carousel, so the brand placement is consistent across the entire set.`,
+    `Step 4: The logo must not overlap the product, the main headline, the selling-point copy, spec lines, or decorative bands. If a conflict appears, keep the product/copy intact and tuck the logo cleanly into the corner; the logo should feel small and refined, never overpower the product.`,
+    `Step 5: If the source image already contains its own logo, brand mark, stamp, or watermark, preserve that element and scale it to match the source style, while still placing the user's brand logo in the ${cornerLabelEn[corner]}. Do not overlay or replace the source's existing brand elements.`,
+  ].join(" ");
+}
+
 export function getPetReplacementNote(lang: EcommerceTextLanguage): string {
   if (lang === "zh") {
     return [
@@ -221,6 +256,7 @@ export function buildManufacturerPromoCarouselPrompt(input: {
   textLanguage: EcommerceTextLanguage;
   sourceIndex: number;
   petReplacementNote?: string;
+  brandLogoNote?: string;
 }) {
   const hierarchy = input.analysis.visualHierarchy;
   const customRequirements = input.customRequirements?.trim()
@@ -238,10 +274,21 @@ export function buildManufacturerPromoCarouselPrompt(input: {
       ].join("\n")
     : "";
 
+  const brandLogoRule = input.brandLogoNote
+    ? [
+        "",
+        "===== ABSOLUTE PRIORITY RULE (overrides all other instructions below) =====",
+        input.brandLogoNote,
+        "End of priority rule. Other rules in this prompt only apply to the parts of the image that the priority rule does not cover.",
+        "",
+      ].join("\n")
+    : "";
+
   return [
     "Create one redesigned ecommerce carousel image using the uploaded manufacturer promotional image as the source reference.",
     `Source image number: ${input.sourceIndex + 1}.`,
     petRule,
+    brandLogoRule,
     "Use image-to-image mode. Preserve the real product identity, shape, materials, proportions, colors, packaging, logo placement if present, and recognizable details from the source image.",
     "Do not copy the original crowded layout. Rebuild the visual composition according to the user's style and copy-selection requirements.",
     `Product subject: ${input.analysis.productSubject}.`,

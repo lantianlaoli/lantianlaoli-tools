@@ -75,6 +75,7 @@ export type EcommerceSlotStatus = "waiting" | "processing" | "success" | "fail";
 
 export type EcommerceProductView = "front" | "side" | "back";
 export type EcommerceSourceMode = "product-photos" | "manufacturer-promos";
+export type EcommerceLogoCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export type EcommerceProductPhotoSlot = {
   view: EcommerceProductView;
@@ -155,6 +156,11 @@ export type EcommerceAssetsJob = {
   petReplacement?: {
     enabled: boolean;
     petImageUrls: string[];
+  };
+  brandLogo?: {
+    enabled: boolean;
+    corner: EcommerceLogoCorner;
+    logoImageUrl: string;
   };
   carouselImages: EcommerceImageSlot[];
   detailImages: EcommerceImageSlot[];

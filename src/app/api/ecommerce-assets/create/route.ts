@@ -13,6 +13,9 @@ export async function POST(request: Request) {
       manufacturerPromoDataUrls?: string[];
       petPhotoDataUrls?: { front?: string | null; side?: string | null; back?: string | null };
       petReplacementEnabled?: boolean;
+      brandLogoDataUrl?: string | null;
+      brandLogoEnabled?: boolean;
+      brandLogoCorner?: string;
       customRequirements?: string;
       textLanguage?: unknown;
       imageResolution?: string;
@@ -44,6 +47,11 @@ export async function POST(request: Request) {
         }
       : undefined;
     const petReplacementEnabled = body.petReplacementEnabled === true && Boolean(petPhotoDataUrls);
+    const brandLogoDataUrl = body.brandLogoEnabled === true
+      && typeof body.brandLogoDataUrl === "string"
+      && body.brandLogoDataUrl.trim().length > 0
+      ? body.brandLogoDataUrl
+      : undefined;
     if (sourceMode === "manufacturer-promos") {
       if (manufacturerPromoDataUrls.length === 0) {
         return NextResponse.json({ error: "At least one manufacturerPromoDataUrl is required." }, { status: 400 });
@@ -67,6 +75,9 @@ export async function POST(request: Request) {
       manufacturerPromoDataUrls,
       petPhotoDataUrls,
       petReplacementEnabled,
+      brandLogoDataUrl,
+      brandLogoEnabled: body.brandLogoEnabled,
+      brandLogoCorner: body.brandLogoCorner,
       customRequirements: body.customRequirements,
       textLanguage: body.textLanguage,
       imageResolution: body.imageResolution,

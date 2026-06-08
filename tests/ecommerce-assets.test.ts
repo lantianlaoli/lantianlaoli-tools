@@ -11,6 +11,7 @@ import {
   buildManufacturerPromoCarouselPrompt,
   fallbackEcommerceBrief,
   fallbackManufacturerPromoAnalysis,
+  getBrandLogoNote,
   getPetReplacementNote,
 } from "../src/lib/ecommerce-assets";
 
@@ -832,4 +833,98 @@ test("fallbackManufacturerPromoAnalysis returns language-specific safe defaults"
   assert.ok(zh.visualHierarchy.layout.length > 0);
   assert.deepEqual(en.visualHierarchy.primaryText, "");
   assert.deepEqual(en.keyMessages, []);
+});
+
+test("manufacturer promo prompt omits brand logo rule when note is absent", () => {
+  const prompt = buildManufacturerPromoCarouselPrompt({
+    analysis: {
+      productSubject: "test product",
+      visualHierarchy: {
+        primaryText: "",
+        secondaryText: [],
+        specs: [],
+        badges: [],
+        logoText: [],
+        decorativeText: [],
+        layout: "centered",
+      },
+      productVisuals: "test visuals",
+      keyMessages: [],
+      rewriteGuidance: "test guidance",
+    },
+    textLanguage: "en",
+    sourceIndex: 0,
+  });
+
+  assert.equal(/brand logo/i.test(prompt), false);
+  assert.equal(/brand-logo/i.test(prompt), false);
+  assert.equal(/ABSOLUTE PRIORITY RULE/.test(prompt), false);
+});
+
+test("manufacturer promo prompt appends the brand logo priority rule when provided", () => {
+  const note = getBrandLogoNote("en", "top-left");
+  const prompt = buildManufacturerPromoCarouselPrompt({
+    analysis: {
+      productSubject: "test product",
+      visualHierarchy: {
+        primaryText: "",
+        secondaryText: [],
+        specs: [],
+        badges: [],
+        logoText: [],
+        decorativeText: [],
+        layout: "centered",
+      },
+      productVisuals: "test visuals",
+      keyMessages: [],
+      rewriteGuidance: "test guidance",
+    },
+    textLanguage: "en",
+    sourceIndex: 0,
+    brandLogoNote: note,
+  });
+
+  assert.match(prompt, /ABSOLUTE PRIORITY RULE/);
+  assert.ok(prompt.includes(note));
+  const head = prompt.split("\n").slice(0, 6).join("\n");
+  assert.match(head, /ABSOLUTE PRIORITY RULE/);
+  assert.match(head, /TOP-LEFT corner/);
+});
+
+test("getBrandLogoNote returns the correct corner text for every corner", () => {
+  const enCorners: Record<string, string> = {
+    "top-left": "TOP-LEFT corner",
+    "top-right": "TOP-RIGHT corner",
+    "bottom-left": "BOTTOM-LEFT corner",
+    "bottom-right": "BOTTOM-RIGHT corner",
+  };
+  const zhCorners: Record<string, string> = {
+    "top-left": "左上角",
+    "top-right": "右上角",
+    "bottom-left": "左下角",
+    "bottom-right": "右下角",
+  };
+
+  for (const [corner, enText] of Object.entries(enCorners)) {
+    const en = getBrandLogoNote("en", corner as "top-left" | "top-right" | "bottom-left" | "bottom-right");
+    const zh = getBrandLogoNote("zh", corner as "top-left" | "top-right" | "bottom-left" | "bottom-right");
+    assert.match(en, new RegExp(enText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(zh, new RegExp(zhCorners[corner]));
+    assert.notEqual(en, zh);
+  }
+});
+
+test("getBrandLogoNote mentions the 8% uniform margin for every corner", () => {
+  const corners: Array<"top-left" | "top-right" | "bottom-left" | "bottom-right"> = [
+    "top-left",
+    "top-right",
+    "bottom-left",
+    "bottom-right",
+  ];
+  for (const corner of corners) {
+    const en = getBrandLogoNote("en", corner);
+    const zh = getBrandLogoNote("zh", corner);
+    assert.match(en, /exactly 8% of the image's shorter side/i);
+    assert.match(zh, /各 8%/);
+  }
 });

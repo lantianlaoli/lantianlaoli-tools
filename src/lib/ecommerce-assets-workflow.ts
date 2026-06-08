@@ -7,6 +7,7 @@ import {
   buildManufacturerPromoCarouselPrompt,
   fallbackEcommerceBrief,
   fallbackManufacturerPromoAnalysis,
+  getBrandLogoNote,
   getPetReplacementNote,
 } from "./ecommerce-assets";
 import {
@@ -26,6 +27,7 @@ import type {
   EcommerceAssetsJob,
   EcommerceCreativeBrief,
   EcommerceImageSlot,
+  EcommerceLogoCorner,
   EcommerceSourceMode,
   EcommerceSlotStatus,
   EcommerceTextLanguage,
@@ -43,9 +45,16 @@ export function normalizeEcommerceAssetScope(value: unknown): EcommerceAssetScop
 
 const ALL_ASSET_SCOPE_OPTIONS: EcommerceAssetScopeOption[] = ["carousel", "detail", "video"];
 const MANUFACTURER_PROMO_LIMIT = 6;
+const BRAND_LOGO_BUCKET = "lantian-tools/ecommerce-brand-logos";
 
 function normalizeSourceMode(value: unknown): EcommerceSourceMode {
   return value === "manufacturer-promos" ? "manufacturer-promos" : "product-photos";
+}
+
+function normalizeLogoCorner(value: unknown): EcommerceLogoCorner {
+  return value === "top-left" || value === "top-right" || value === "bottom-left" || value === "bottom-right"
+    ? value
+    : "top-left";
 }
 
 export function normalizeEcommerceAssetScopes(value: unknown, legacyScope?: unknown): EcommerceAssetScopeOption[] {
@@ -143,6 +152,8 @@ async function createManufacturerPromoImageSlots(input: {
   imageAspectRatio: KieAspectRatio;
   petHostedUrls?: string[];
   petReplacementNote?: string;
+  brandLogoHostedUrl?: string;
+  brandLogoNote?: string;
 }) {
   const callBackUrl = getKieCallbackUrl();
   const results = await Promise.all(
@@ -163,10 +174,12 @@ async function createManufacturerPromoImageSlots(input: {
         textLanguage: input.textLanguage,
         sourceIndex: index,
         petReplacementNote: input.petReplacementNote,
+        brandLogoNote: input.brandLogoNote,
       });
-      const inputUrls = input.petHostedUrls?.length
-        ? [imageUrl, ...input.petHostedUrls]
-        : [imageUrl];
+      const refUrls: string[] = [];
+      if (input.brandLogoHostedUrl) refUrls.push(input.brandLogoHostedUrl);
+      if (input.petHostedUrls?.length) refUrls.push(...input.petHostedUrls);
+      const inputUrls = refUrls.length ? [imageUrl, ...refUrls] : [imageUrl];
       const taskId = await createKieImageTask({
         prompt,
         inputUrls,
@@ -200,6 +213,9 @@ export async function createEcommerceAssetsJob(input: {
   manufacturerPromoDataUrls?: string[];
   petPhotoDataUrls?: { front: string | null; side: string | null; back: string | null };
   petReplacementEnabled?: boolean;
+  brandLogoDataUrl?: string | null;
+  brandLogoEnabled?: boolean;
+  brandLogoCorner?: string;
   customRequirements?: string;
   textLanguage?: unknown;
   imageResolution?: string;
@@ -281,6 +297,30 @@ export async function createEcommerceAssetsJob(input: {
         ? getPetReplacementNote(textLanguage)
         : undefined;
 
+      const wantsBrandLogo = sourceMode === "manufacturer-promos"
+        && input.brandLogoEnabled === true
+        && Boolean(input.brandLogoDataUrl && input.brandLogoDataUrl.trim());
+      const brandLogoCorner = normalizeLogoCorner(input.brandLogoCorner);
+      let brandLogoImageUrl: string | undefined;
+      if (wantsBrandLogo && input.brandLogoDataUrl) {
+        try {
+          brandLogoImageUrl = await uploadKieImage(
+            input.brandLogoDataUrl,
+            `brand-logo-${jobId}.png`,
+            BRAND_LOGO_BUCKET,
+          );
+        } catch (error) {
+          console.error(
+            "[ecommerce-assets] Brand logo upload failed; continuing without logo:",
+            error instanceof Error ? error.message : error,
+          );
+          brandLogoImageUrl = undefined;
+        }
+      }
+      const brandLogoNote = brandLogoImageUrl
+        ? getBrandLogoNote(textLanguage, brandLogoCorner)
+        : undefined;
+
       const manufacturerSlots = await createManufacturerPromoImageSlots({
         manufacturerPromoImageUrls,
         customRequirements: input.customRequirements,
@@ -289,6 +329,8 @@ export async function createEcommerceAssetsJob(input: {
         imageAspectRatio,
         petHostedUrls: petImageUrls.length === 3 ? petImageUrls : undefined,
         petReplacementNote,
+        brandLogoHostedUrl: brandLogoImageUrl,
+        brandLogoNote,
       });
 
       return {
@@ -299,6 +341,9 @@ export async function createEcommerceAssetsJob(input: {
         manufacturerPromoAnalyses: manufacturerSlots.analyses,
         petReplacement: petImageUrls.length === 3
           ? { enabled: true, petImageUrls }
+          : undefined,
+        brandLogo: brandLogoImageUrl
+          ? { enabled: true, corner: brandLogoCorner, logoImageUrl: brandLogoImageUrl }
           : undefined,
         carouselImages: manufacturerSlots.carouselImages,
         detailImages: [],
