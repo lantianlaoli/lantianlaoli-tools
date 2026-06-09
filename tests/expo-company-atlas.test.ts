@@ -112,7 +112,6 @@ function sampleJob(): ExpoAtlasJob {
     imageResolution: "1K",
     photos,
     companies: [{ ...company, markdown }],
-    persistence: "memory",
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -460,10 +459,8 @@ test("POST /api/expo-company-atlas/create uploads images and creates a structure
 test("POST /api/expo-company-atlas/generate creates one KIE task per target photo", async () => {
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
-  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  const taskBodies: Array<{ model: string; callBackUrl?: string; input: Record<string, unknown> }> = [];
+  const taskBodies: Array<{ model: string; input: Record<string, unknown> }> = [];
   process.env.KIE_API_KEY = "test-kie";
-  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
 
   globalThis.fetch = async (input, init) => {
     const url = String(input);
@@ -491,15 +488,12 @@ test("POST /api/expo-company-atlas/generate creates one KIE task per target phot
     assert.equal(taskBodies.length, 2);
     assert.equal(taskBodies.every((body) => body.model === "gpt-image-2-image-to-image"), true);
     assert.equal(taskBodies.every((body) => body.input.aspect_ratio === "1:1"), true);
-    assert.equal(taskBodies.every((body) => body.callBackUrl === undefined), true);
     assert.equal(payload.job.photos[0].generationTaskId, "task-1");
     assert.equal(payload.job.photos[0].generationStatus, "processing");
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKieApiKey === undefined) delete process.env.KIE_API_KEY;
     else process.env.KIE_API_KEY = originalKieApiKey;
-    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
-    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   }
 });
 
@@ -513,7 +507,7 @@ test("expo status maps KIE recordInfo results into generated photo URLs", async 
         JSON.stringify({
           code: 200,
           data: {
-            taskId: "callback-task",
+            taskId: "poll-task",
             state: "success",
             resultJson: JSON.stringify({ resultUrls: ["https://cdn.example.com/generated.png"] }),
           },
@@ -526,7 +520,7 @@ test("expo status maps KIE recordInfo results into generated photo URLs", async 
 
   try {
     const job = sampleJob();
-    job.photos[0] = { ...job.photos[0], generationTaskId: "callback-task", generationStatus: "processing" };
+    job.photos[0] = { ...job.photos[0], generationTaskId: "poll-task", generationStatus: "processing" };
 
     const response = await refreshExpoAtlasStatus(
       new Request("http://localhost:3000/api/expo-company-atlas/status", {

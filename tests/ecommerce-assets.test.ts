@@ -98,12 +98,10 @@ test("POST /api/ecommerce-assets/create uploads the photo and starts image tasks
   const originalKieApiKey = process.env.KIE_API_KEY;
   const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
   const originalOpenRouterModel = process.env.OPENROUTER_MODEL;
-  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  const createTaskBodies: Array<{ model: string; callBackUrl?: string; input: Record<string, unknown> }> = [];
+  const createTaskBodies: Array<{ model: string; input: Record<string, unknown> }> = [];
   process.env.KIE_API_KEY = "test-kie-key";
   process.env.OPENROUTER_API_KEY = "test-openrouter-key";
   process.env.OPENROUTER_MODEL = "test-model";
-  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
 
   globalThis.fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
@@ -171,7 +169,6 @@ test("POST /api/ecommerce-assets/create uploads the photo and starts image tasks
     assert.equal(createTaskBodies.length, 13);
     assert.equal(createTaskBodies.filter((body) => body.model === "gpt-image-2-image-to-image").length, 13);
     assert.equal(createTaskBodies.every((body) => body.input.aspect_ratio === "1:1"), true);
-    assert.equal(createTaskBodies.every((body) => body.callBackUrl === undefined), true);
     assert.equal(payload.job.carouselImages[0].taskId, "task-1");
     assert.equal(payload.job.video.storyboardTaskId, "task-13");
   } finally {
@@ -182,8 +179,6 @@ test("POST /api/ecommerce-assets/create uploads the photo and starts image tasks
     else process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
     if (originalOpenRouterModel === undefined) delete process.env.OPENROUTER_MODEL;
     else process.env.OPENROUTER_MODEL = originalOpenRouterModel;
-    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
-    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   }
 });
 
@@ -191,11 +186,9 @@ test("POST /api/ecommerce-assets/create honors assetScope", async () => {
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
   const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
-  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   const createTaskBodies: Array<{ model: string; input: Record<string, unknown> }> = [];
   process.env.KIE_API_KEY = "test-kie-key";
   process.env.OPENROUTER_API_KEY = "test-openrouter-key";
-  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
 
   globalThis.fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
@@ -291,8 +284,6 @@ test("POST /api/ecommerce-assets/create honors assetScope", async () => {
     else process.env.KIE_API_KEY = originalKieApiKey;
     if (originalOpenRouterApiKey === undefined) delete process.env.OPENROUTER_API_KEY;
     else process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
-    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
-    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   }
 });
 
@@ -301,14 +292,12 @@ test("POST /api/ecommerce-assets/create generates one carousel image per manufac
   const originalKieApiKey = process.env.KIE_API_KEY;
   const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
   const originalOpenRouterModel = process.env.OPENROUTER_MODEL;
-  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  const createTaskBodies: Array<{ model: string; callBackUrl?: string; input: Record<string, unknown> }> = [];
+  const createTaskBodies: Array<{ model: string; input: Record<string, unknown> }> = [];
   const openRouterBodies: Array<{ messages: Array<{ content: unknown }> }> = [];
   let uploadCount = 0;
   process.env.KIE_API_KEY = "test-kie-key";
   process.env.OPENROUTER_API_KEY = "test-openrouter-key";
   process.env.OPENROUTER_MODEL = "test-model";
-  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
 
   globalThis.fetch = async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
@@ -408,8 +397,6 @@ test("POST /api/ecommerce-assets/create generates one carousel image per manufac
     else process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
     if (originalOpenRouterModel === undefined) delete process.env.OPENROUTER_MODEL;
     else process.env.OPENROUTER_MODEL = originalOpenRouterModel;
-    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
-    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   }
 });
 
@@ -468,12 +455,10 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
   const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
-  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   let createTaskCount = 0;
-  const createTaskBodies: Array<{ model: string; callBackUrl?: string }> = [];
+  const createTaskBodies: Array<{ model: string }> = [];
   process.env.KIE_API_KEY = "test-kie-key";
   process.env.OPENROUTER_API_KEY = "test-openrouter-key";
-  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
 
   globalThis.fetch = async (input, init) => {
     const url = String(input);
@@ -546,7 +531,6 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
     assert.equal(firstStatus.job.video.storyboardUrl?.length > 0, true);
     assert.match(firstStatus.job.video.storyboardUrl, /^https:\/\/cdn\.example\.com\//);
     assert.equal(createTaskBodies.at(-1)?.model, "bytedance/seedance-2-fast");
-    assert.equal(createTaskBodies.at(-1)?.callBackUrl, undefined);
 
     const secondStatusResponse = await refreshEcommerceAssetsStatus(
       new Request("http://localhost:3000/api/ecommerce-assets/status", {
@@ -565,8 +549,6 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
     else process.env.KIE_API_KEY = originalKieApiKey;
     if (originalOpenRouterApiKey === undefined) delete process.env.OPENROUTER_API_KEY;
     else process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
-    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
-    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   }
 });
 
@@ -574,11 +556,9 @@ test("POST /api/ecommerce-assets/status advances a video-only job from polling",
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
   const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
-  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   let createTaskCount = 0;
   process.env.KIE_API_KEY = "test-kie-key";
   process.env.OPENROUTER_API_KEY = "test-openrouter-key";
-  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
 
   globalThis.fetch = async (input, init) => {
     const url = String(input);
@@ -650,18 +630,14 @@ test("POST /api/ecommerce-assets/status advances a video-only job from polling",
     else process.env.KIE_API_KEY = originalKieApiKey;
     if (originalOpenRouterApiKey === undefined) delete process.env.OPENROUTER_API_KEY;
     else process.env.OPENROUTER_API_KEY = originalOpenRouterApiKey;
-    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
-    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   }
 });
 
-test("POST /api/ecommerce-assets/retry recreates a failed image task with no webhook callback", async () => {
+test("POST /api/ecommerce-assets/retry recreates a failed image task", async () => {
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
-  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  let createTaskBody: { callBackUrl?: string; input?: Record<string, unknown> } | undefined;
+  let createTaskBody: { input?: Record<string, unknown> } | undefined;
   process.env.KIE_API_KEY = "test-kie-key";
-  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
 
   globalThis.fetch = async (input, init) => {
     const url = String(input);
@@ -710,24 +686,19 @@ test("POST /api/ecommerce-assets/retry recreates a failed image task with no web
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { taskId: "retry-task" });
-    assert.equal(createTaskBody?.callBackUrl, undefined);
     assert.deepEqual(createTaskBody?.input?.input_urls, ["https://cdn.example.com/product.png"]);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKieApiKey === undefined) delete process.env.KIE_API_KEY;
     else process.env.KIE_API_KEY = originalKieApiKey;
-    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
-    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   }
 });
 
 test("POST /api/ecommerce-assets/retry uses the matching manufacturer promo source image", async () => {
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
-  const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  let createTaskBody: { callBackUrl?: string; input?: Record<string, unknown> } | undefined;
+  let createTaskBody: { input?: Record<string, unknown> } | undefined;
   process.env.KIE_API_KEY = "test-kie-key";
-  process.env.NEXT_PUBLIC_SITE_URL = "https://rivora.example.com";
 
   globalThis.fetch = async (input, init) => {
     const url = String(input);
@@ -782,8 +753,6 @@ test("POST /api/ecommerce-assets/retry uses the matching manufacturer promo sour
     globalThis.fetch = originalFetch;
     if (originalKieApiKey === undefined) delete process.env.KIE_API_KEY;
     else process.env.KIE_API_KEY = originalKieApiKey;
-    if (originalSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
-    else process.env.NEXT_PUBLIC_SITE_URL = originalSiteUrl;
   }
 });
 

@@ -235,7 +235,6 @@ export type ExpoAtlasJob = {
   photos: ExpoAtlasPhoto[];
   companies: ExpoAtlasCompany[];
   error?: string;
-  persistence: "redis" | "memory";
   createdAt: number;
   updatedAt: number;
 };

@@ -125,7 +125,6 @@ export async function createExpoAtlasJob(input: {
     photos: normalized.photos,
     companies: normalized.companies,
     error,
-    persistence: "memory",
     createdAt: now,
     updatedAt: now,
   });

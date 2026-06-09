@@ -54,11 +54,11 @@ const features = {
     },
     {
       href: "/fx-calculator",
-      title: "汇率加价计算器",
-      description: "输入人民币成本，按 3 档独立可调的加价倍数，一键算出每档的 RMB 和 USD 售价。",
+      title: "核价工具",
+      description: "输入批发平台人民币价格，选择销售倍率，快速算出人民币售价和美元建议售价。",
       icon: Banknote,
-      meta: "RMB · 3 档 · USD",
-      action: "打开计算器",
+      meta: "批发价 · 倍率 · USD",
+      action: "打开工具",
     },
   ],
   en: [
@@ -104,11 +104,11 @@ const features = {
     },
     {
       href: "/fx-calculator",
-      title: "FX Markup Calculator",
-      description: "Enter a CNY cost, set three independent markup tiers, and get RMB and USD prices for each.",
+      title: "Quote Tool",
+      description: "Enter a CNY wholesale-platform price, choose markups, and get RMB and USD suggested prices.",
       icon: Banknote,
-      meta: "CNY · 3 tiers · USD",
-      action: "Open calculator",
+      meta: "Wholesale · Markup · USD",
+      action: "Open tool",
     },
   ],
 } satisfies Record<EcommerceTextLanguage, Array<{

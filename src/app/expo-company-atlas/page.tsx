@@ -74,7 +74,6 @@ const INITIAL_JOB: ExpoAtlasJob = {
       parseStatus: "draft",
     },
   ],
-  persistence: "memory",
   createdAt: 0,
   updatedAt: 0,
 };
