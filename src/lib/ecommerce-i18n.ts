@@ -20,14 +20,13 @@ const STRINGS = {
   statCarouselOutOfSix: { zh: "0/6", en: "0/6" },
   statNotGenerated: { zh: "未生成", en: "Not generated" },
 
-  // Step 1 — Source
-  step1Kicker: { zh: "Step 1", en: "Step 1" },
-  step1Title: { zh: "我的产品", en: "My Product" },
-  step1SubtitleProduct: {
+  // Source
+  sourceTitle: { zh: "素材来源", en: "Source Assets" },
+  sourceSubtitleProduct: {
     zh: "正视图必填，侧视图和背视图用于提高产品一致性。",
     en: "Front view is required; side and back views help keep the product consistent.",
   },
-  step1SubtitleManufacturer: {
+  sourceSubtitleManufacturer: {
     zh: "上传厂家宣传图，生成时再解析文字层级并按顺序一图一改。",
     en: "Upload manufacturer promo images — we parse the text hierarchy and redesign each one in order.",
   },
@@ -69,7 +68,6 @@ const STRINGS = {
   errAtLeastOnePromo: { zh: "请至少上传 1 张厂家宣传图。", en: "Please upload at least one manufacturer promo image." },
   errStartFailed: { zh: "启动生成失败。", en: "Failed to start generation." },
   errPollFailed: { zh: "查询生成状态失败。", en: "Failed to check generation status." },
-  errZipFailed: { zh: "导出 ZIP 失败。", en: "Failed to export ZIP." },
   errRetryFailed: { zh: "Retry failed.", en: "Retry failed." },
   errReadImageFailed: { zh: "读取图片失败", en: "Failed to read the image" },
   errRegenMaxImages: { zh: "最多上传 4 张参考图", en: "Upload up to 4 reference images" },
@@ -81,17 +79,7 @@ const STRINGS = {
     en: "Please enter a refinement or upload a reference image.",
   },
 
-  // Step 2 — Requirements
-  step2Kicker: { zh: "Step 2", en: "Step 2" },
-  step2Title: { zh: "自定义需求", en: "Custom Requirements" },
-  step2SubtitleProduct: {
-    zh: "点击快捷用语会追加到输入框；详情图文案可保留，轮播图文字可单独约束。",
-    en: "Click a quick phrase to append it. You can keep detail copy or constrain carousel copy separately.",
-  },
-  step2SubtitleManufacturer: {
-    zh: "预设风格模板可直接使用；你也可以在 Quick Phrases 中继续增改自定义短语。",
-    en: "Preset style templates are ready to use. You can also add or edit more in Quick Phrases.",
-  },
+  // Prompt
   quickPhrasesTitle: { zh: "快捷用语", en: "Quick Phrases" },
   quickPhrasesEmpty: { zh: "暂无快捷用语", en: "No quick phrases yet" },
   quickPhrasesAdd: { zh: "新增", en: "Add" },
@@ -117,17 +105,21 @@ const STRINGS = {
     en: "e.g. Apple-style white background, bold black copy, keep one main selling point per image, drop the spec walls.",
   },
 
-  // Step 3 — Settings
-  step3Kicker: { zh: "Step 3", en: "Step 3" },
-  step3Title: { zh: "生成设置", en: "Generation Settings" },
-  step3SubtitleProduct: {
+  // Settings
+  settingsDrawerOpen: { zh: "配置", en: "Configure" },
+  settingsDrawerClose: { zh: "关闭配置", en: "Close configuration" },
+  settingsDrawerTitle: { zh: "生成配置", en: "Generation Configuration" },
+  settingsDrawerSubtitleProduct: {
     zh: "设置语言、图片比例和视频规格。",
     en: "Set language, image aspect ratio, and video specs.",
   },
-  step3SubtitleManufacturer: {
+  settingsDrawerSubtitleManufacturer: {
     zh: "厂家模式仅生成轮播图；设置语言、图片比例和分辨率。",
     en: "Manufacturer mode only generates carousel images — set language, aspect ratio, and resolution.",
   },
+  settingsCategory: { zh: "品类", en: "Category" },
+  settingsCategoryGeneral: { zh: "通用", en: "General" },
+  settingsCategoryPet: { zh: "宠物", en: "Pet" },
   settingsLanguage: { zh: "语言", en: "Language" },
   settingsLangEn: { zh: "EN", en: "EN" },
   settingsLangZh: { zh: "中文", en: "中文" },
@@ -137,6 +129,26 @@ const STRINGS = {
     zh: "厂家宣传图再设计模式仅生成轮播图，数量等于上传图片数量。",
     en: "Manufacturer mode only generates carousel images — one per uploaded promo image.",
   },
+  unsupportedManufacturerVideo: {
+    zh: "厂家图模式暂不支持视频生成。",
+    en: "Video generation is not supported in manufacturer mode yet.",
+  },
+  unsupportedManufacturerScope: {
+    zh: "厂家图模式固定只生成轮播图。",
+    en: "Manufacturer mode is fixed to carousel only.",
+  },
+  unsupportedProductBrand: {
+    zh: "品牌标识暂只支持厂家图模式。",
+    en: "Brand logo is currently only supported in manufacturer mode.",
+  },
+  unsupportedPetCategory: {
+    zh: "选择宠物品类后才可启用宠物替换。",
+    en: "Choose the pet category to enable pet replacement.",
+  },
+  unsupportedProductPet: {
+    zh: "宠物替换暂只支持厂家图模式。",
+    en: "Pet replacement is currently only supported in manufacturer mode.",
+  },
   generationScopeTitle: { zh: "生成范围", en: "Generation Scope" },
   generationScopeCountOne: { zh: "已选择 1 项", en: "1 selected" },
   generationScopeCountMany: { zh: "已选择 {count} 项", en: "{count} selected" },
@@ -145,7 +157,6 @@ const STRINGS = {
   generationTargetDetail: { zh: "详情图", en: "Detail" },
   generationTargetVideo: { zh: "视频", en: "Video" },
   generateButton: { zh: "一键生成", en: "Generate" },
-  downloadZipButton: { zh: "下载 ZIP", en: "Download ZIP" },
 
   // Pet replacement (manufacturer-promo mode only)
   petSectionTitle: { zh: "宠物替换", en: "Pet Replacement" },
