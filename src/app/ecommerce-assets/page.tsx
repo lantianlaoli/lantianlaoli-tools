@@ -10,7 +10,6 @@ import {
   BadgeCheck,
   Check,
   Download,
-  FileArchive,
   Film,
   ImageIcon,
   Languages,
@@ -20,6 +19,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Settings2,
   Sparkles,
   Stamp,
   Trash2,
@@ -61,6 +61,7 @@ type PageStatus = "idle" | "reading" | "starting" | "polling" | "done" | "error"
 type VideoResolution = "480p" | "720p";
 type LocalReferenceImage = { id: string; fileName: string; dataUrl: string };
 type ManufacturerPromoImage = { id: string; fileName: string; dataUrl: string };
+type ProductCategory = "general" | "pet";
 
 const ACCEPTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -482,6 +483,7 @@ function segmentedButtonClass(active: boolean, disabled?: boolean) {
 export default function EcommerceAssetsPage() {
   const [status, setStatus] = useState<PageStatus>("idle");
   const [sourceMode, setSourceMode] = useState<EcommerceSourceMode>("product-photos");
+  const [productCategory, setProductCategory] = useState<ProductCategory>("general");
   const [textLanguage, setTextLanguage] = useState<EcommerceTextLanguage>(initialTextLanguage);
   const [customRequirements, setCustomRequirements] = useState("");
   const [requirementPhrases, setRequirementPhrases] = useState<string[]>(() => initialRequirementPhrases(textLanguage));
@@ -519,6 +521,7 @@ export default function EcommerceAssetsPage() {
   const [job, setJob] = useState<EcommerceAssetsJob | null>(null);
   const jobRef = useRef<EcommerceAssetsJob | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [regenerateSlot, setRegenerateSlot] = useState<EcommerceImageSlot | null>(null);
   const [refinementText, setRefinementText] = useState("");
   const [regenerateImages, setRegenerateImages] = useState<LocalReferenceImage[]>([]);
@@ -549,16 +552,14 @@ export default function EcommerceAssetsPage() {
   const activeSourceMode = job?.sourceMode ?? sourceMode;
   const isManufacturerMode = activeSourceMode === "manufacturer-promos";
   const videoPresentation = getEcommerceVideoPresentation(job);
-  const hasAnyResult = Boolean(
-    job?.carouselImages.some((slot) => slot.resultUrl) ||
-      job?.detailImages.some((slot) => slot.resultUrl) ||
-      job?.video.resultUrl
-  );
 
   const frontPhoto = productPhotos.find((p) => p.view === "front")!;
   const hasFront = Boolean(frontPhoto.dataUrl);
   const productUploadedCount = productPhotos.filter((p) => p.dataUrl).length;
   const uploadedCount = sourceMode === "manufacturer-promos" ? manufacturerPromos.length : productUploadedCount;
+  const isPetCategory = productCategory === "pet";
+  const canUsePetReplacement = isPetCategory && sourceMode === "manufacturer-promos";
+  const canUseBrandLogo = sourceMode === "manufacturer-promos";
   const canStartGeneration = sourceMode === "manufacturer-promos"
     ? manufacturerPromos.length > 0 && !isBusy
     : hasFront && !isBusy && generationTargets.length > 0;
@@ -846,28 +847,6 @@ export default function EcommerceAssetsPage() {
     }
   }
 
-  async function downloadZip() {
-    if (!job) return;
-    const response = await fetch("/api/ecommerce-assets/zip", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job }),
-    });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      throw new Error(payload.error || t("errZipFailed", textLanguage));
-    }
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "ecommerce-assets.zip";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
-
   function applyRequirementPhrase(phrase: string) {
     if (isBusy) return;
     setCustomRequirements((current) => appendRequirementPhrase(current, phrase));
@@ -1080,6 +1059,15 @@ export default function EcommerceAssetsPage() {
     };
   }, [job, status, textLanguage]);
 
+  useEffect(() => {
+    if (!isSettingsOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsSettingsOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSettingsOpen]);
+
   return (
     <main className="min-h-screen bg-[#050705] bg-[linear-gradient(180deg,#09100b_0%,#050705_34%,#050705_100%)] text-zinc-100">
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6 md:px-6">
@@ -1123,227 +1111,219 @@ export default function EcommerceAssetsPage() {
 
         {error ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-100">{error}</div> : null}
 
-        <section className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="min-w-0 space-y-5">
-            <div className="min-w-0 rounded-lg border border-emerald-300/10 bg-[#080d0a] p-5">
-              <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase text-lime-200">{t("step1Kicker", textLanguage)}</p>
-                  <h2 className="mt-1 text-lg font-semibold text-white">{t("step1Title", textLanguage)}</h2>
-                  <p className="mt-1 text-sm text-zinc-400">
-                    {sourceMode === "manufacturer-promos" ? t("step1SubtitleManufacturer", textLanguage) : t("step1SubtitleProduct", textLanguage)}
-                  </p>
+        <section className="space-y-5">
+          <div className="min-w-0 rounded-lg border border-emerald-300/10 bg-[#080d0a] p-5">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white">{t("sourceTitle", textLanguage)}</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  {sourceMode === "manufacturer-promos" ? t("sourceSubtitleManufacturer", textLanguage) : t("sourceSubtitleProduct", textLanguage)}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <div className="grid grid-cols-2 rounded-md border border-emerald-300/10 bg-black/20 p-1">
+                  {[
+                    { mode: "product-photos" as const, key: "sourceModeProduct" as const },
+                    { mode: "manufacturer-promos" as const, key: "sourceModeManufacturer" as const },
+                  ].map((item) => (
+                    <button
+                      key={item.mode}
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => switchSourceMode(item.mode)}
+                      className={`h-8 rounded border px-2 text-[11px] font-semibold transition sm:px-3 ${segmentedButtonClass(sourceMode === item.mode, isBusy)}`}
+                    >
+                      {t(item.key, textLanguage)}
+                    </button>
+                  ))}
                 </div>
                 <span className="inline-flex h-8 items-center rounded-full border border-emerald-300/15 bg-emerald-300/[0.05] px-3 text-xs font-semibold text-emerald-100">
                   {uploadedCount}/{sourceMode === "manufacturer-promos" ? MANUFACTURER_PROMO_LIMIT : 3} {t("uploadedCountLabel", textLanguage)}
                 </span>
               </div>
-
-              <div className="mb-5 grid grid-cols-2 rounded-lg border border-emerald-300/10 bg-black/20 p-1">
-                {[
-                  { mode: "product-photos" as const, key: "sourceModeProduct" as const },
-                  { mode: "manufacturer-promos" as const, key: "sourceModeManufacturer" as const },
-                ].map((item) => (
-                  <button
-                    key={item.mode}
-                    type="button"
-                    disabled={isBusy}
-                    onClick={() => switchSourceMode(item.mode)}
-                    className={`h-10 rounded-md border text-sm font-semibold transition ${segmentedButtonClass(sourceMode === item.mode, isBusy)}`}
-                  >
-                    {t(item.key, textLanguage)}
-                  </button>
-                ))}
-              </div>
-
-              {sourceMode === "manufacturer-promos" ? (
-                <ManufacturerPromoUploader
-                  images={manufacturerPromos}
-                  isBusy={isBusy}
-                  isReading={isReadingManufacturerPromos}
-                  lang={textLanguage}
-                  inputRef={manufacturerInputRef}
-                  onUpload={handleManufacturerPromoUpload}
-                  onRemove={removeManufacturerPromo}
-                  onReplace={replaceManufacturerPromo}
-                />
-              ) : (
-                <div className="grid gap-4 md:grid-cols-3">
-                  {productPhotos.map((photo) => (
-                    <PhotoUploadSlot
-                      key={photo.view}
-                      view={photo.view}
-                      photo={photo}
-                      isBusy={isBusy}
-                      readingView={readingView}
-                      lang={textLanguage}
-                      onUpload={handleFile}
-                      onRemove={handleRemove}
-                      inputRef={inputRefs[photo.view]}
-                      showRequired
-                      removeAriaKey={
-                        photo.view === "front"
-                          ? "removeAriaFront"
-                          : photo.view === "side"
-                            ? "removeAriaSide"
-                            : "removeAriaBack"
-                      }
-                    />
-                  ))}
-                </div>
-              )}
             </div>
 
-            <div className="min-w-0 rounded-lg border border-emerald-300/10 bg-[#080d0a] p-5">
-              <div className="mb-4">
-                <p className="text-[11px] font-semibold uppercase text-lime-200">{t("step2Kicker", textLanguage)}</p>
-                <h2 className="mt-1 text-lg font-semibold text-white">{t("step2Title", textLanguage)}</h2>
-                <p className="mt-1 text-sm text-zinc-400">
-                  {sourceMode === "manufacturer-promos" ? t("step2SubtitleManufacturer", textLanguage) : t("step2SubtitleProduct", textLanguage)}
-                </p>
+            {sourceMode === "manufacturer-promos" ? (
+              <ManufacturerPromoUploader
+                images={manufacturerPromos}
+                isBusy={isBusy}
+                isReading={isReadingManufacturerPromos}
+                lang={textLanguage}
+                inputRef={manufacturerInputRef}
+                onUpload={handleManufacturerPromoUpload}
+                onRemove={removeManufacturerPromo}
+                onReplace={replaceManufacturerPromo}
+              />
+            ) : (
+              <div className="grid gap-4 md:grid-cols-3">
+                {productPhotos.map((photo) => (
+                  <PhotoUploadSlot
+                    key={photo.view}
+                    view={photo.view}
+                    photo={photo}
+                    isBusy={isBusy}
+                    readingView={readingView}
+                    lang={textLanguage}
+                    onUpload={handleFile}
+                    onRemove={handleRemove}
+                    inputRef={inputRefs[photo.view]}
+                    showRequired
+                    removeAriaKey={
+                      photo.view === "front"
+                        ? "removeAriaFront"
+                        : photo.view === "side"
+                          ? "removeAriaSide"
+                          : "removeAriaBack"
+                    }
+                  />
+                ))}
               </div>
+            )}
 
-              <div className="mb-3 rounded-lg border border-emerald-300/10 bg-[#050806] p-3">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <span className="text-xs font-semibold text-zinc-300">{t("quickPhrasesTitle", textLanguage)}</span>
-                  <button
-                    type="button"
-                    disabled={isBusy}
-                    onClick={() => {
-                      setEditingPhraseIndex(null);
-                      setEditingPhraseDraft("");
-                      setIsAddingPhrase(true);
-                    }}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-lime-300/25 bg-lime-300/[0.08] px-3 text-xs font-semibold text-lime-100 transition hover:bg-lime-300/[0.14] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.02] disabled:text-zinc-700"
-                    aria-label={t("quickPhrasesAddAria", textLanguage)}
-                    title={t("quickPhrasesAdd", textLanguage)}
-                  >
-                    <Plus size={14} aria-hidden="true" />
-                    {t("quickPhrasesAdd", textLanguage)}
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {requirementPhrases.length ? (
-                    requirementPhrases.map((phrase, index) => {
-                      const isEditing = editingPhraseIndex === index;
-                      const duplicateEdit = requirementPhrases.some((item, itemIndex) => itemIndex !== index && item === editingPhraseDraft.trim());
-                      return (
-                        <div
-                          key={`${phrase}-${index}`}
-                          data-requirement-phrase={phrase}
-                          className="group flex max-w-full items-center gap-1 rounded-md border border-emerald-300/10 bg-white/[0.03] p-1"
-                        >
-                          {isEditing ? (
-                            <>
-                              <input
-                                value={editingPhraseDraft}
-                                onChange={(event) => setEditingPhraseDraft(event.target.value)}
-                                disabled={isBusy}
-                                className="h-9 w-full min-w-0 rounded border border-emerald-300/20 bg-black/30 px-3 text-sm text-zinc-100 outline-none focus:border-lime-300/50 disabled:opacity-50 sm:min-w-[260px]"
-                                autoFocus
-                              />
-                              <button
-                                type="button"
-                                disabled={isBusy || !editingPhraseDraft.trim() || duplicateEdit}
-                                onClick={persistEditedPhrase}
-                                className="flex h-9 w-9 items-center justify-center rounded text-lime-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:text-zinc-700"
-                                aria-label={t("quickPhrasesSaveAria", textLanguage)}
-                                title={t("quickPhrasesTitleSave", textLanguage)}
-                              >
-                                <Check size={15} aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                onClick={() => {
-                                  setEditingPhraseIndex(null);
-                                  setEditingPhraseDraft("");
-                                }}
-                                className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 hover:bg-white/10 hover:text-zinc-200 disabled:opacity-50"
-                                aria-label={t("quickPhrasesCancelAria", textLanguage)}
-                                title={t("quickPhrasesTitleCancel", textLanguage)}
-                              >
-                                <X size={15} aria-hidden="true" />
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                onClick={() => applyRequirementPhrase(phrase)}
-                                className="min-h-9 max-w-[520px] truncate rounded px-3 text-left text-sm text-zinc-200 transition hover:bg-lime-300/[0.08] hover:text-lime-50 disabled:cursor-not-allowed disabled:text-zinc-600"
-                                title={phrase}
-                              >
-                                {phrase}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                onClick={() => startEditingPhrase(index, phrase)}
-                                className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 transition hover:bg-white/10 hover:text-zinc-200 disabled:opacity-50"
-                                aria-label={t("quickPhrasesEditAria", textLanguage)}
-                                title={t("quickPhrasesTitleAttr", textLanguage)}
-                              >
-                                <Pencil size={14} aria-hidden="true" />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                onClick={() => removeRequirementPhrase(index)}
-                                className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 transition hover:bg-red-500/15 hover:text-red-100 disabled:opacity-50"
-                                aria-label={t("quickPhrasesDeleteAria", textLanguage)}
-                                title={t("quickPhrasesTitleDelete", textLanguage)}
-                              >
-                                <Trash2 size={14} aria-hidden="true" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <span className="flex min-h-9 items-center rounded-md border border-dashed border-white/10 px-3 text-sm text-zinc-600">{t("quickPhrasesEmpty", textLanguage)}</span>
-                  )}
-                  {isAddingPhrase ? (
-                    <div className="flex items-center gap-1 rounded-md border border-lime-300/20 bg-lime-300/[0.06] p-1">
-                      <input
-                        value={newPhraseDraft}
-                        onChange={(event) => setNewPhraseDraft(event.target.value)}
-                        disabled={isBusy}
-                        placeholder={t("quickPhrasesNewPlaceholder", textLanguage)}
-                        className="h-9 w-full min-w-0 rounded border border-emerald-300/20 bg-black/30 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-lime-300/50 disabled:opacity-50 sm:min-w-[260px]"
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        disabled={isBusy || !newPhraseDraft.trim() || requirementPhrases.includes(newPhraseDraft.trim())}
-                        onClick={persistNewPhrase}
-                        className="flex h-9 w-9 items-center justify-center rounded text-lime-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:text-zinc-700"
-                        aria-label={t("quickPhrasesSaveNewAria", textLanguage)}
-                        title={t("quickPhrasesTitleSave", textLanguage)}
-                      >
-                        <Check size={15} aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => {
-                          setIsAddingPhrase(false);
-                          setNewPhraseDraft("");
-                        }}
-                        className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 hover:bg-white/10 hover:text-zinc-200 disabled:opacity-50"
-                        aria-label={t("quickPhrasesCancelNewAria", textLanguage)}
-                        title={t("quickPhrasesTitleCancel", textLanguage)}
-                      >
-                        <X size={15} aria-hidden="true" />
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
+            <div className="my-5 border-t border-emerald-300/10" />
+
+            <div className="mb-3 rounded-lg border border-emerald-300/10 bg-[#050806] p-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-zinc-300">{t("quickPhrasesTitle", textLanguage)}</span>
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => {
+                    setEditingPhraseIndex(null);
+                    setEditingPhraseDraft("");
+                    setIsAddingPhrase(true);
+                  }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-lime-300/25 bg-lime-300/[0.08] px-3 text-xs font-semibold text-lime-100 transition hover:bg-lime-300/[0.14] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.02] disabled:text-zinc-700"
+                  aria-label={t("quickPhrasesAddAria", textLanguage)}
+                  title={t("quickPhrasesAdd", textLanguage)}
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  {t("quickPhrasesAdd", textLanguage)}
+                </button>
               </div>
+              <div className="flex flex-wrap gap-2">
+                {requirementPhrases.length ? (
+                  requirementPhrases.map((phrase, index) => {
+                    const isEditing = editingPhraseIndex === index;
+                    const duplicateEdit = requirementPhrases.some((item, itemIndex) => itemIndex !== index && item === editingPhraseDraft.trim());
+                    return (
+                      <div
+                        key={`${phrase}-${index}`}
+                        data-requirement-phrase={phrase}
+                        className="group flex max-w-full items-center gap-1 rounded-md border border-emerald-300/10 bg-white/[0.03] p-1"
+                      >
+                        {isEditing ? (
+                          <>
+                            <input
+                              value={editingPhraseDraft}
+                              onChange={(event) => setEditingPhraseDraft(event.target.value)}
+                              disabled={isBusy}
+                              className="h-9 w-full min-w-0 rounded border border-emerald-300/20 bg-black/30 px-3 text-sm text-zinc-100 outline-none focus:border-lime-300/50 disabled:opacity-50 sm:min-w-[260px]"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              disabled={isBusy || !editingPhraseDraft.trim() || duplicateEdit}
+                              onClick={persistEditedPhrase}
+                              className="flex h-9 w-9 items-center justify-center rounded text-lime-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:text-zinc-700"
+                              aria-label={t("quickPhrasesSaveAria", textLanguage)}
+                              title={t("quickPhrasesTitleSave", textLanguage)}
+                            >
+                              <Check size={15} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => {
+                                setEditingPhraseIndex(null);
+                                setEditingPhraseDraft("");
+                              }}
+                              className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 hover:bg-white/10 hover:text-zinc-200 disabled:opacity-50"
+                              aria-label={t("quickPhrasesCancelAria", textLanguage)}
+                              title={t("quickPhrasesTitleCancel", textLanguage)}
+                            >
+                              <X size={15} aria-hidden="true" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => applyRequirementPhrase(phrase)}
+                              className="min-h-9 max-w-[520px] truncate rounded px-3 text-left text-sm text-zinc-200 transition hover:bg-lime-300/[0.08] hover:text-lime-50 disabled:cursor-not-allowed disabled:text-zinc-600"
+                              title={phrase}
+                            >
+                              {phrase}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => startEditingPhrase(index, phrase)}
+                              className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 transition hover:bg-white/10 hover:text-zinc-200 disabled:opacity-50"
+                              aria-label={t("quickPhrasesEditAria", textLanguage)}
+                              title={t("quickPhrasesTitleAttr", textLanguage)}
+                            >
+                              <Pencil size={14} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => removeRequirementPhrase(index)}
+                              className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 transition hover:bg-red-500/15 hover:text-red-100 disabled:opacity-50"
+                              aria-label={t("quickPhrasesDeleteAria", textLanguage)}
+                              title={t("quickPhrasesTitleDelete", textLanguage)}
+                            >
+                              <Trash2 size={14} aria-hidden="true" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <span className="flex min-h-9 items-center rounded-md border border-dashed border-white/10 px-3 text-sm text-zinc-600">{t("quickPhrasesEmpty", textLanguage)}</span>
+                )}
+                {isAddingPhrase ? (
+                  <div className="flex items-center gap-1 rounded-md border border-lime-300/20 bg-lime-300/[0.06] p-1">
+                    <input
+                      value={newPhraseDraft}
+                      onChange={(event) => setNewPhraseDraft(event.target.value)}
+                      disabled={isBusy}
+                      placeholder={t("quickPhrasesNewPlaceholder", textLanguage)}
+                      className="h-9 w-full min-w-0 rounded border border-emerald-300/20 bg-black/30 px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-lime-300/50 disabled:opacity-50 sm:min-w-[260px]"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      disabled={isBusy || !newPhraseDraft.trim() || requirementPhrases.includes(newPhraseDraft.trim())}
+                      onClick={persistNewPhrase}
+                      className="flex h-9 w-9 items-center justify-center rounded text-lime-100 hover:bg-white/10 disabled:cursor-not-allowed disabled:text-zinc-700"
+                      aria-label={t("quickPhrasesSaveNewAria", textLanguage)}
+                      title={t("quickPhrasesTitleSave", textLanguage)}
+                    >
+                      <Check size={15} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() => {
+                        setIsAddingPhrase(false);
+                        setNewPhraseDraft("");
+                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded text-zinc-500 hover:bg-white/10 hover:text-zinc-200 disabled:opacity-50"
+                      aria-label={t("quickPhrasesCancelNewAria", textLanguage)}
+                      title={t("quickPhrasesTitleCancel", textLanguage)}
+                    >
+                      <X size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
 
-              <label className="mb-2 block text-sm font-semibold text-zinc-200" htmlFor="custom-requirements">
+            <div className="rounded-lg border border-emerald-300/15 bg-[#050806] p-2 focus-within:border-lime-300/45">
+              <label className="sr-only" htmlFor="custom-requirements">
                 {t("customRequirementsLabel", textLanguage)}
               </label>
               <textarea
@@ -1352,347 +1332,393 @@ export default function EcommerceAssetsPage() {
                 onChange={(event) => setCustomRequirements(event.target.value)}
                 disabled={isBusy}
                 placeholder={sourceMode === "manufacturer-promos" ? t("customRequirementsPlaceholderManufacturer", textLanguage) : t("customRequirementsPlaceholderProduct", textLanguage)}
-                className="min-h-36 w-full resize-y rounded-lg border border-emerald-300/15 bg-[#050806] px-4 py-3 text-sm leading-6 text-zinc-100 outline-none placeholder:text-zinc-600 transition-colors focus:border-lime-300/45 disabled:opacity-50"
+                className="min-h-32 w-full resize-y rounded-md border-0 bg-transparent px-3 py-3 text-sm leading-6 text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-50"
               />
+              <div className="flex flex-col gap-2 border-t border-emerald-300/10 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-emerald-300/15 bg-white/[0.03] px-3 text-xs font-semibold text-zinc-100 transition hover:border-lime-300/35 hover:bg-lime-300/[0.08]"
+                >
+                  <Settings2 size={15} aria-hidden="true" />
+                  {t("settingsDrawerOpen", textLanguage)}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canStartGeneration}
+                  onClick={() => startGeneration()}
+                  className="flex h-11 min-w-36 items-center justify-center gap-2 rounded-md bg-lime-300 px-5 text-sm font-semibold text-zinc-950 transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+                >
+                  {isBusy ? <Loader2 size={17} aria-hidden="true" className="animate-spin" /> : <Sparkles size={17} aria-hidden="true" />}
+                  {t("generateButton", textLanguage)}
+                </button>
+              </div>
             </div>
           </div>
 
-          <aside className="min-w-0 rounded-lg border border-emerald-300/10 bg-[#080d0a] p-5 lg:sticky lg:top-5 lg:self-start">
-            <div className="mb-5">
-              <p className="text-[11px] font-semibold uppercase text-lime-200">{t("step3Kicker", textLanguage)}</p>
-              <h2 className="mt-1 text-lg font-semibold text-white">{t("step3Title", textLanguage)}</h2>
-              <p className="mt-1 text-sm text-zinc-400">
-                {sourceMode === "manufacturer-promos" ? t("step3SubtitleManufacturer", textLanguage) : t("step3SubtitleProduct", textLanguage)}
-              </p>
-            </div>
-
-            <div className="space-y-5">
-              <SettingsGroup icon={<Languages size={14} aria-hidden="true" />} label={t("settingsLanguage", textLanguage)}>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["en", "zh"] as const).map((lang) => (
-                    <button
-                      key={lang}
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => setTextLanguage(lang)}
-                      className={`h-11 rounded-md border text-sm font-semibold transition ${segmentedButtonClass(textLanguage === lang, isBusy)}`}
-                    >
-                      {lang === "en" ? t("settingsLangEn", textLanguage) : t("settingsLangZh", textLanguage)}
-                    </button>
-                  ))}
-                </div>
-              </SettingsGroup>
-
-              <SettingsGroup icon={<Monitor size={14} aria-hidden="true" />} label={t("settingsImage", textLanguage)}>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {(["1:1", "4:3", "3:4", "16:9", "9:16"] as const).map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      disabled={isBusy}
-                      onClick={() => setImageAspectRatio(r)}
-                      className={`h-10 rounded-md border text-xs font-semibold transition ${segmentedButtonClass(imageAspectRatio === r, isBusy)}`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["1K", "2K", "4K"] as const).map((res) => {
-                    const disabled = isBusy || res !== "1K";
-                    return (
-                      <button
-                        key={res}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => setImageResolution(res)}
-                        className={`h-10 rounded-md border text-xs font-semibold transition ${segmentedButtonClass(imageResolution === res, disabled)}`}
-                      >
-                        {res}
-                      </button>
-                    );
-                  })}
-                </div>
-              </SettingsGroup>
-
-              {sourceMode === "manufacturer-promos" ? (
-                <SettingsGroup
-                  icon={<PawPrint size={14} aria-hidden="true" />}
-                  label={t("petSectionTitle", textLanguage)}
-                >
+          {isSettingsOpen ? (
+            <div className="fixed inset-0 z-50 flex justify-end bg-black/70" role="presentation" onMouseDown={() => setIsSettingsOpen(false)}>
+              <aside
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="ecommerce-settings-title"
+                className="h-full w-full max-w-[440px] overflow-y-auto border-l border-emerald-300/10 bg-[#080d0a] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="mb-5 flex items-start justify-between gap-4">
+                  <div>
+                    <h2 id="ecommerce-settings-title" className="text-lg font-semibold text-white">{t("settingsDrawerTitle", textLanguage)}</h2>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      {sourceMode === "manufacturer-promos" ? t("settingsDrawerSubtitleManufacturer", textLanguage) : t("settingsDrawerSubtitleProduct", textLanguage)}
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    role="switch"
-                    aria-checked={petReplacementEnabled}
-                    disabled={isBusy}
-                    onClick={() => setPetReplacementEnabled((value) => !value)}
-                    className="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-zinc-100 transition hover:border-emerald-300/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.03] text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+                    aria-label={t("settingsDrawerClose", textLanguage)}
+                    title={t("settingsDrawerClose", textLanguage)}
                   >
-                    <span>{t("petToggleLabel", textLanguage)}</span>
-                    <span
-                      className={`flex h-6 w-11 items-center rounded-full p-0.5 transition ${petReplacementEnabled ? "bg-lime-300" : "bg-zinc-700"}`}
-                    >
-                      <span
-                        className={`flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition ${petReplacementEnabled ? "translate-x-5" : "translate-x-0"}`}
-                      >
-                        {petReplacementEnabled ? <Check size={12} aria-hidden="true" className="text-zinc-900" /> : null}
-                      </span>
-                    </span>
+                    <X size={16} aria-hidden="true" />
                   </button>
-                  {petReplacementEnabled ? (
-                    <div className="flex flex-col gap-2">
-                      <p className="text-[11px] leading-5 text-zinc-400">{t("petEmptyHint", textLanguage)}</p>
-                      <div className="grid grid-cols-3 gap-2">
-                        {petPhotos.map((photo) => (
-                          <PhotoUploadSlot
-                            key={photo.view}
-                            view={photo.view}
-                            photo={photo}
-                            isBusy={isBusy}
-                            readingView={petReadingView}
-                            lang={textLanguage}
-                            onUpload={handlePetFile}
-                            onRemove={removePetPhoto}
-                            inputRef={petInputRefs[photo.view]}
-                            replaceAriaKey={
-                              photo.view === "front"
-                                ? "petReplaceAriaFront"
-                                : photo.view === "side"
-                                  ? "petReplaceAriaSide"
-                                  : "petReplaceAriaBack"
-                            }
-                            removeAriaKey="petRemoveCta"
-                          />
-                        ))}
-                      </div>
+                </div>
+
+                <div className="space-y-5">
+                  <SettingsGroup icon={<Languages size={14} aria-hidden="true" />} label={t("settingsLanguage", textLanguage)}>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["en", "zh"] as const).map((lang) => (
+                        <button
+                          key={lang}
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => setTextLanguage(lang)}
+                          className={`h-11 rounded-md border text-sm font-semibold transition ${segmentedButtonClass(textLanguage === lang, isBusy)}`}
+                        >
+                          {lang === "en" ? t("settingsLangEn", textLanguage) : t("settingsLangZh", textLanguage)}
+                        </button>
+                      ))}
                     </div>
-                  ) : null}
-                </SettingsGroup>
-              ) : null}
+                  </SettingsGroup>
 
-              {sourceMode === "manufacturer-promos" ? (
-                <SettingsGroup
-                  icon={<Stamp size={14} aria-hidden="true" />}
-                  label={t("brandLogoSectionTitle", textLanguage)}
-                >
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={brandLogoEnabled}
-                    disabled={isBusy}
-                    onClick={() => setBrandLogoEnabled((value) => !value)}
-                    className="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-zinc-100 transition hover:border-emerald-300/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <span>{t("brandLogoToggleLabel", textLanguage)}</span>
-                    <span
-                      className={`flex h-6 w-11 items-center rounded-full p-0.5 transition ${brandLogoEnabled ? "bg-lime-300" : "bg-zinc-700"}`}
-                    >
-                      <span
-                        className={`flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition ${brandLogoEnabled ? "translate-x-5" : "translate-x-0"}`}
-                      >
-                        {brandLogoEnabled ? <Check size={12} aria-hidden="true" className="text-zinc-900" /> : null}
+                  <SettingsGroup icon={<ImageIcon size={14} aria-hidden="true" />} label={t("settingsCategory", textLanguage)}>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["general", "pet"] as const).map((category) => (
+                        <button
+                          key={category}
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => {
+                            setProductCategory(category);
+                            if (category === "general") setPetReplacementEnabled(false);
+                          }}
+                          className={`h-11 rounded-md border text-sm font-semibold transition ${segmentedButtonClass(productCategory === category, isBusy)}`}
+                        >
+                          {category === "general" ? t("settingsCategoryGeneral", textLanguage) : t("settingsCategoryPet", textLanguage)}
+                        </button>
+                      ))}
+                    </div>
+                  </SettingsGroup>
+
+                  <SettingsGroup icon={<Monitor size={14} aria-hidden="true" />} label={t("settingsImage", textLanguage)}>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {(["1:1", "4:3", "3:4", "16:9", "9:16"] as const).map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => setImageAspectRatio(r)}
+                          className={`h-10 rounded-md border text-xs font-semibold transition ${segmentedButtonClass(imageAspectRatio === r, isBusy)}`}
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(["1K", "2K", "4K"] as const).map((res) => {
+                        const disabled = isBusy || res !== "1K";
+                        return (
+                          <button
+                            key={res}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => setImageResolution(res)}
+                            className={`h-10 rounded-md border text-xs font-semibold transition ${segmentedButtonClass(imageResolution === res, disabled)}`}
+                          >
+                            {res}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </SettingsGroup>
+
+                  <SettingsGroup icon={<Film size={14} aria-hidden="true" />} label={t("settingsVideo", textLanguage)}>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {(["1:1", "4:3", "3:4", "16:9", "9:16"] as const).map((r) => {
+                        const disabled = isBusy || sourceMode === "manufacturer-promos";
+                        return (
+                          <button
+                            key={r}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => setVideoAspectRatio(r)}
+                            className={`h-10 rounded-md border text-xs font-semibold transition ${segmentedButtonClass(videoAspectRatio === r, disabled)}`}
+                          >
+                            {r}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["480p", "720p"] as const).map((res) => {
+                        const disabled = isBusy || sourceMode === "manufacturer-promos" || res !== "480p";
+                        return (
+                          <button
+                            key={res}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => setVideoResolution(res)}
+                            className={`h-10 rounded-md border text-xs font-semibold transition ${segmentedButtonClass(videoResolution === res, disabled)}`}
+                          >
+                            {res}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {sourceMode === "manufacturer-promos" ? (
+                      <p className="text-[11px] leading-5 text-zinc-500">{t("unsupportedManufacturerVideo", textLanguage)}</p>
+                    ) : null}
+                  </SettingsGroup>
+
+                  <div className="rounded-lg border border-emerald-300/10 bg-black/20 p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold text-zinc-300">{t("generationScopeTitle", textLanguage)}</p>
+                      <span className="text-[11px] text-zinc-500">
+                        {sourceMode === "manufacturer-promos"
+                          ? formatT("generationScopeCountOne", textLanguage, { count: 1 })
+                          : generationTargets.length
+                            ? formatT(generationTargets.length === 1 ? "generationScopeCountOne" : "generationScopeCountMany", textLanguage, { count: generationTargets.length })
+                            : t("generationScopeAtLeastOne", textLanguage)}
                       </span>
-                    </span>
-                  </button>
-                  {brandLogoEnabled ? (
-                    <div className="flex flex-col gap-3">
-                      <div className="rounded-lg border border-dashed border-emerald-300/20 bg-[#050806] p-3">
-                        {brandLogoDataUrl ? (
-                          <div className="flex items-center gap-3">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={brandLogoDataUrl}
-                              alt={t("brandLogoUploadAria", textLanguage)}
-                              className="h-20 w-20 shrink-0 rounded-md border border-white/10 bg-white object-contain p-1"
+                    </div>
+                    <div className="space-y-2">
+                      {[
+                        { scope: "carousel" as const, key: "generationTargetCarousel" as const },
+                        { scope: "detail" as const, key: "generationTargetDetail" as const },
+                        { scope: "video" as const, key: "generationTargetVideo" as const },
+                      ].map((item) => {
+                        const active = sourceMode === "manufacturer-promos" ? item.scope === "carousel" : generationTargets.includes(item.scope);
+                        const disabled = isBusy || sourceMode === "manufacturer-promos";
+                        return (
+                          <button
+                            key={item.scope}
+                            type="button"
+                            role="switch"
+                            aria-checked={active}
+                            disabled={disabled}
+                            onClick={() => toggleGenerationTarget(item.scope)}
+                            className="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-zinc-100 transition hover:border-emerald-300/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <span>{t(item.key, textLanguage)}</span>
+                            <span className={`flex h-6 w-11 items-center rounded-full p-0.5 transition ${active ? "bg-lime-300" : "bg-zinc-700"}`}>
+                              <span className={`h-5 w-5 rounded-full bg-zinc-950 shadow transition ${active ? "translate-x-5" : "translate-x-0"}`} />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {sourceMode === "manufacturer-promos" ? (
+                      <p className="mt-3 text-[11px] leading-5 text-zinc-500">{t("unsupportedManufacturerScope", textLanguage)}</p>
+                    ) : null}
+                  </div>
+
+                  <SettingsGroup
+                    icon={<PawPrint size={14} aria-hidden="true" />}
+                    label={t("petSectionTitle", textLanguage)}
+                  >
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={petReplacementEnabled}
+                      disabled={isBusy || !canUsePetReplacement}
+                      onClick={() => setPetReplacementEnabled((value) => !value)}
+                      className="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-zinc-100 transition hover:border-emerald-300/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span>{t("petToggleLabel", textLanguage)}</span>
+                      <span
+                        className={`flex h-6 w-11 items-center rounded-full p-0.5 transition ${petReplacementEnabled ? "bg-lime-300" : "bg-zinc-700"}`}
+                      >
+                        <span
+                          className={`flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition ${petReplacementEnabled ? "translate-x-5" : "translate-x-0"}`}
+                        >
+                          {petReplacementEnabled ? <Check size={12} aria-hidden="true" className="text-zinc-900" /> : null}
+                        </span>
+                      </span>
+                    </button>
+                    {!isPetCategory ? (
+                      <p className="text-[11px] leading-5 text-zinc-500">{t("unsupportedPetCategory", textLanguage)}</p>
+                    ) : sourceMode !== "manufacturer-promos" ? (
+                      <p className="text-[11px] leading-5 text-zinc-500">{t("unsupportedProductPet", textLanguage)}</p>
+                    ) : null}
+                    {petReplacementEnabled && canUsePetReplacement ? (
+                      <div className="flex flex-col gap-2">
+                        <p className="text-[11px] leading-5 text-zinc-400">{t("petEmptyHint", textLanguage)}</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {petPhotos.map((photo) => (
+                            <PhotoUploadSlot
+                              key={photo.view}
+                              view={photo.view}
+                              photo={photo}
+                              isBusy={isBusy}
+                              readingView={petReadingView}
+                              lang={textLanguage}
+                              onUpload={handlePetFile}
+                              onRemove={removePetPhoto}
+                              inputRef={petInputRefs[photo.view]}
+                              replaceAriaKey={
+                                photo.view === "front"
+                                  ? "petReplaceAriaFront"
+                                  : photo.view === "side"
+                                    ? "petReplaceAriaSide"
+                                    : "petReplaceAriaBack"
+                              }
+                              removeAriaKey="petRemoveCta"
                             />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs text-zinc-300" title={brandLogoFileName ?? ""}>
-                                {brandLogoFileName}
-                              </p>
-                              <div className="mt-2 flex items-center gap-2">
-                                <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-emerald-300/15 bg-emerald-300/[0.06] px-2.5 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.12]">
-                                  <RefreshCw size={12} aria-hidden="true" />
-                                  {t("brandLogoReplaceCta", textLanguage)}
-                                  <input
-                                    ref={brandLogoInputRef}
-                                    type="file"
-                                    accept="image/png,image/jpeg,image/webp"
-                                    disabled={isBusy || isReadingBrandLogo}
-                                    className="sr-only"
-                                    onChange={(event) => {
-                                      const file = event.target.files?.[0];
-                                      if (file) handleBrandLogoFile(file);
-                                    }}
-                                  />
-                                </label>
-                                <button
-                                  type="button"
-                                  disabled={isBusy}
-                                  onClick={removeBrandLogo}
-                                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 text-[11px] font-semibold text-zinc-200 transition hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                  aria-label={t("brandLogoRemoveCta", textLanguage)}
-                                >
-                                  <X size={12} aria-hidden="true" />
-                                  {t("brandLogoRemoveCta", textLanguage)}
-                                </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </SettingsGroup>
+
+                  <SettingsGroup
+                    icon={<Stamp size={14} aria-hidden="true" />}
+                    label={t("brandLogoSectionTitle", textLanguage)}
+                  >
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={brandLogoEnabled}
+                      disabled={isBusy || !canUseBrandLogo}
+                      onClick={() => setBrandLogoEnabled((value) => !value)}
+                      className="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-zinc-100 transition hover:border-emerald-300/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span>{t("brandLogoToggleLabel", textLanguage)}</span>
+                      <span
+                        className={`flex h-6 w-11 items-center rounded-full p-0.5 transition ${brandLogoEnabled ? "bg-lime-300" : "bg-zinc-700"}`}
+                      >
+                        <span
+                          className={`flex h-5 w-5 items-center justify-center rounded-full bg-white shadow transition ${brandLogoEnabled ? "translate-x-5" : "translate-x-0"}`}
+                        >
+                          {brandLogoEnabled ? <Check size={12} aria-hidden="true" className="text-zinc-900" /> : null}
+                        </span>
+                      </span>
+                    </button>
+                    {!canUseBrandLogo ? (
+                      <p className="text-[11px] leading-5 text-zinc-500">{t("unsupportedProductBrand", textLanguage)}</p>
+                    ) : null}
+                    {brandLogoEnabled && canUseBrandLogo ? (
+                      <div className="flex flex-col gap-3">
+                        <div className="rounded-lg border border-dashed border-emerald-300/20 bg-[#050806] p-3">
+                          {brandLogoDataUrl ? (
+                            <div className="flex items-center gap-3">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={brandLogoDataUrl}
+                                alt={t("brandLogoUploadAria", textLanguage)}
+                                className="h-20 w-20 shrink-0 rounded-md border border-white/10 bg-white object-contain p-1"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-xs text-zinc-300" title={brandLogoFileName ?? ""}>
+                                  {brandLogoFileName}
+                                </p>
+                                <div className="mt-2 flex items-center gap-2">
+                                  <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-emerald-300/15 bg-emerald-300/[0.06] px-2.5 text-[11px] font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.12]">
+                                    <RefreshCw size={12} aria-hidden="true" />
+                                    {t("brandLogoReplaceCta", textLanguage)}
+                                    <input
+                                      ref={brandLogoInputRef}
+                                      type="file"
+                                      accept="image/png,image/jpeg,image/webp"
+                                      disabled={isBusy || isReadingBrandLogo}
+                                      className="sr-only"
+                                      onChange={(event) => {
+                                        const file = event.target.files?.[0];
+                                        if (file) handleBrandLogoFile(file);
+                                      }}
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={removeBrandLogo}
+                                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 text-[11px] font-semibold text-zinc-200 transition hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                    aria-label={t("brandLogoRemoveCta", textLanguage)}
+                                  >
+                                    <X size={12} aria-hidden="true" />
+                                    {t("brandLogoRemoveCta", textLanguage)}
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ) : (
-                          <label className="flex aspect-[3/1] cursor-pointer flex-col items-center justify-center gap-2 text-zinc-500 transition hover:text-zinc-300">
-                            {isReadingBrandLogo ? (
-                              <Loader2 size={22} aria-hidden="true" className="animate-spin" />
-                            ) : (
-                              <Upload size={22} aria-hidden="true" />
-                            )}
-                            <span className="text-sm font-medium">
-                              {isReadingBrandLogo
-                                ? t("readingLabel", textLanguage)
-                                : t("brandLogoUploadCta", textLanguage)}
-                            </span>
-                            <input
-                              ref={brandLogoInputRef}
-                              type="file"
-                              accept="image/png,image/jpeg,image/webp"
-                              disabled={isBusy || isReadingBrandLogo}
-                              aria-label={t("brandLogoUploadAria", textLanguage)}
-                              className="sr-only"
-                              onChange={(event) => {
-                                const file = event.target.files?.[0];
-                                if (file) handleBrandLogoFile(file);
-                              }}
-                            />
-                          </label>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-[11px] font-semibold text-zinc-400">{t("brandLogoCornerLabel", textLanguage)}</span>
-                        <div className="grid grid-cols-4 gap-1.5">
-                          {(Object.keys(LOGO_CORNER_META) as EcommerceLogoCorner[]).map((corner) => {
-                            const meta = LOGO_CORNER_META[corner];
-                            const Icon = meta.Icon;
-                            const active = brandLogoCorner === corner;
-                            return (
-                              <button
-                                key={corner}
-                                type="button"
-                                disabled={isBusy}
-                                onClick={() => setBrandLogoCorner(corner)}
-                                className={`flex h-10 items-center justify-center gap-1.5 rounded-md border text-[11px] font-semibold transition ${segmentedButtonClass(active, isBusy)}`}
-                                aria-pressed={active}
-                                aria-label={t(meta.key, textLanguage)}
-                                title={t(meta.key, textLanguage)}
-                              >
-                                <Icon size={14} aria-hidden="true" />
-                                <span className="hidden sm:inline">{t(meta.key, textLanguage)}</span>
-                              </button>
-                            );
-                          })}
+                          ) : (
+                            <label className="flex aspect-[3/1] cursor-pointer flex-col items-center justify-center gap-2 text-zinc-500 transition hover:text-zinc-300">
+                              {isReadingBrandLogo ? (
+                                <Loader2 size={22} aria-hidden="true" className="animate-spin" />
+                              ) : (
+                                <Upload size={22} aria-hidden="true" />
+                              )}
+                              <span className="text-sm font-medium">
+                                {isReadingBrandLogo
+                                  ? t("readingLabel", textLanguage)
+                                  : t("brandLogoUploadCta", textLanguage)}
+                              </span>
+                              <input
+                                ref={brandLogoInputRef}
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                disabled={isBusy || isReadingBrandLogo}
+                                aria-label={t("brandLogoUploadAria", textLanguage)}
+                                className="sr-only"
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0];
+                                  if (file) handleBrandLogoFile(file);
+                                }}
+                              />
+                            </label>
+                          )}
                         </div>
-                        <p className="mt-1 text-[11px] leading-5 text-zinc-400">{t("brandLogoMarginHint", textLanguage)}</p>
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[11px] font-semibold text-zinc-400">{t("brandLogoCornerLabel", textLanguage)}</span>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {(Object.keys(LOGO_CORNER_META) as EcommerceLogoCorner[]).map((corner) => {
+                              const meta = LOGO_CORNER_META[corner];
+                              const Icon = meta.Icon;
+                              const active = brandLogoCorner === corner;
+                              return (
+                                <button
+                                  key={corner}
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => setBrandLogoCorner(corner)}
+                                  className={`flex h-10 items-center justify-center gap-1.5 rounded-md border text-[11px] font-semibold transition ${segmentedButtonClass(active, isBusy)}`}
+                                  aria-pressed={active}
+                                  aria-label={t(meta.key, textLanguage)}
+                                  title={t(meta.key, textLanguage)}
+                                >
+                                  <Icon size={14} aria-hidden="true" />
+                                  <span className="hidden sm:inline">{t(meta.key, textLanguage)}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="mt-1 text-[11px] leading-5 text-zinc-400">{t("brandLogoMarginHint", textLanguage)}</p>
+                        </div>
                       </div>
-                    </div>
-                  ) : null}
-                </SettingsGroup>
-              ) : null}
-
-              {sourceMode !== "manufacturer-promos" ? (
-                <SettingsGroup icon={<Film size={14} aria-hidden="true" />} label={t("settingsVideo", textLanguage)}>
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {(["1:1", "4:3", "3:4", "16:9", "9:16"] as const).map((r) => (
-                      <button
-                        key={r}
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => setVideoAspectRatio(r)}
-                        className={`h-10 rounded-md border text-xs font-semibold transition ${segmentedButtonClass(videoAspectRatio === r, isBusy)}`}
-                      >
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(["480p", "720p"] as const).map((res) => {
-                      const disabled = isBusy || res !== "480p";
-                      return (
-                        <button
-                          key={res}
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => setVideoResolution(res)}
-                          className={`h-10 rounded-md border text-xs font-semibold transition ${segmentedButtonClass(videoResolution === res, disabled)}`}
-                        >
-                          {res}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </SettingsGroup>
-              ) : null}
+                    ) : null}
+                  </SettingsGroup>
+                </div>
+              </aside>
             </div>
-
-            {sourceMode === "manufacturer-promos" ? (
-              <div className="mt-5 rounded-lg border border-lime-300/15 bg-lime-300/[0.04] p-3 text-xs leading-5 text-lime-100">
-                {t("manufacturerModeNotice", textLanguage)}
-              </div>
-            ) : (
-              <div className="mt-5 rounded-lg border border-emerald-300/10 bg-black/20 p-3">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-xs font-semibold text-zinc-300">{t("generationScopeTitle", textLanguage)}</p>
-                  <span className="text-[11px] text-zinc-500">
-                    {generationTargets.length
-                      ? formatT(generationTargets.length === 1 ? "generationScopeCountOne" : "generationScopeCountMany", textLanguage, { count: generationTargets.length })
-                      : t("generationScopeAtLeastOne", textLanguage)}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {[
-                    { scope: "carousel" as const, key: "generationTargetCarousel" as const },
-                    { scope: "detail" as const, key: "generationTargetDetail" as const },
-                    { scope: "video" as const, key: "generationTargetVideo" as const },
-                  ].map((item) => {
-                    const active = generationTargets.includes(item.scope);
-                    return (
-                      <button
-                        key={item.scope}
-                        type="button"
-                        role="switch"
-                        aria-checked={active}
-                        disabled={isBusy}
-                        onClick={() => toggleGenerationTarget(item.scope)}
-                        className="flex h-11 w-full items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.03] px-3 text-sm font-semibold text-zinc-100 transition hover:border-emerald-300/25 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <span>{t(item.key, textLanguage)}</span>
-                        <span className={`flex h-6 w-11 items-center rounded-full p-0.5 transition ${active ? "bg-lime-300" : "bg-zinc-700"}`}>
-                          <span className={`h-5 w-5 rounded-full bg-zinc-950 shadow transition ${active ? "translate-x-5" : "translate-x-0"}`} />
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <button
-              type="button"
-              disabled={!canStartGeneration}
-              onClick={() => startGeneration()}
-              className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-md bg-lime-300 text-sm font-semibold text-zinc-950 transition hover:bg-lime-200 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
-            >
-              {isBusy ? <Loader2 size={17} aria-hidden="true" className="animate-spin" /> : <Sparkles size={17} aria-hidden="true" />}
-              {t("generateButton", textLanguage)}
-            </button>
-
-            <button
-              type="button"
-              disabled={!hasAnyResult}
-              onClick={() => downloadZip().catch((zipError) => setError(zipError instanceof Error ? zipError.message : t("errZipFailed", textLanguage)))}
-              className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-emerald-300/15 bg-white/[0.03] text-sm font-semibold text-zinc-100 transition hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:text-zinc-700"
-            >
-              <FileArchive size={16} aria-hidden="true" />
-              {t("downloadZipButton", textLanguage)}
-            </button>
-          </aside>
+          ) : null}
         </section>
 
         <section>
