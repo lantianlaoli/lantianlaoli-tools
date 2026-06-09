@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { createKieImageTask, getKieCallbackUrl, uploadKieImage } from "@/lib/kie";
+import { createKieImageTask, uploadKieImage } from "@/lib/kie";
 import { buildGenerationPrompt } from "@/lib/prompt";
-import { setStoredJobStatus } from "@/lib/job-store";
 import { getStoredWorkbook } from "@/lib/workbook-store";
 import type { GenerationJob, ParsedWorkbook, ParsedWorkbookRow, WorkbookImage } from "@/lib/types";
 
@@ -51,7 +50,6 @@ export async function POST(request: Request) {
     }
 
     const jobs: GenerationJob[] = [];
-    const callBackUrl = getKieCallbackUrl();
     const uploadedUrls = new Map<string, Promise<string>>();
 
     function uploadReference(image: WorkbookImage, fileName: string) {
@@ -93,13 +91,6 @@ export async function POST(request: Request) {
         inputUrls,
         aspectRatio: row.aspectRatio,
         resolution: row.resolution,
-        callBackUrl,
-      });
-      await setStoredJobStatus({
-        taskId,
-        status: "waiting",
-        updatedAt: new Date().toISOString(),
-        source: "polling",
       });
 
       jobs.push({
@@ -115,7 +106,7 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ jobs, callBackUrl: callBackUrl ?? null });
+    return NextResponse.json({ jobs });
   } catch (error) {
     console.error("[generate/start]", error);
     return NextResponse.json(

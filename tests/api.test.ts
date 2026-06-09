@@ -3,8 +3,6 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { POST as regenerateImage } from "../src/app/api/generate/regenerate/route";
 import { POST as startGeneration } from "../src/app/api/generate/start/route";
-import { GET as getGenerationStatus } from "../src/app/api/generate/status/route";
-import { POST as receiveGenerationWebhook } from "../src/app/api/generate/webhook/route";
 import { GET as downloadImage } from "../src/app/api/image/download/route";
 import { GET as getWorkbookImage } from "../src/app/api/workbook/image/route";
 import { POST as parseWorkbookUpload } from "../src/app/api/workbook/parse/route";
@@ -76,40 +74,6 @@ test("POST /api/workbook/parse rejects non-xlsx uploads", async () => {
 
   assert.equal(response.status, 400);
   assert.deepEqual(await response.json(), { error: "Only .xlsx files are supported." });
-});
-
-test("generation webhook stores a result that status reads without polling KIE", async () => {
-  const taskId = `uploaded-workbook-test-${Date.now()}`;
-  const resultUrl = "https://example.com/generated-image.png";
-
-  const webhookResponse = await receiveGenerationWebhook(
-    new Request("http://localhost:3000/api/generate/webhook", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        code: 200,
-        data: {
-          taskId,
-          state: "success",
-          resultJson: JSON.stringify({ resultUrls: [resultUrl] }),
-        },
-      }),
-    })
-  );
-
-  assert.equal(webhookResponse.status, 200);
-  assert.deepEqual(await webhookResponse.json(), { success: true });
-
-  const statusResponse = await getGenerationStatus(
-    new Request(`http://localhost:3000/api/generate/status?taskId=${encodeURIComponent(taskId)}`)
-  );
-  assert.equal(statusResponse.status, 200);
-
-  const status = await statusResponse.json();
-  assert.equal(status.taskId, taskId);
-  assert.equal(status.status, "success");
-  assert.equal(status.resultUrl, resultUrl);
-  assert.equal(status.source, "webhook");
 });
 
 test("POST /api/generate/regenerate creates a new task from the current result image", async () => {

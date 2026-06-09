@@ -7,7 +7,6 @@ import { POST as parseExpoAtlasCompany } from "../src/app/api/expo-company-atlas
 import { POST as retryExpoAtlas } from "../src/app/api/expo-company-atlas/retry/route";
 import { POST as refreshExpoAtlasStatus } from "../src/app/api/expo-company-atlas/status/route";
 import { POST as updateExpoAtlas } from "../src/app/api/expo-company-atlas/update/route";
-import { POST as receiveKieCallback } from "../src/app/api/kie/callback/route";
 import {
   buildExpoCompanyMarkdown,
   buildExpoImagePrompt,
@@ -492,7 +491,7 @@ test("POST /api/expo-company-atlas/generate creates one KIE task per target phot
     assert.equal(taskBodies.length, 2);
     assert.equal(taskBodies.every((body) => body.model === "gpt-image-2-image-to-image"), true);
     assert.equal(taskBodies.every((body) => body.input.aspect_ratio === "1:1"), true);
-    assert.equal(taskBodies.every((body) => body.callBackUrl === "https://rivora.example.com/api/kie/callback"), true);
+    assert.equal(taskBodies.every((body) => body.callBackUrl === undefined), true);
     assert.equal(payload.job.photos[0].generationTaskId, "task-1");
     assert.equal(payload.job.photos[0].generationStatus, "processing");
   } finally {
@@ -504,39 +503,47 @@ test("POST /api/expo-company-atlas/generate creates one KIE task per target phot
   }
 });
 
-test("expo status maps KIE callback results into generated photo URLs", async () => {
-  const job = sampleJob();
-  job.photos[0] = { ...job.photos[0], generationTaskId: "callback-task", generationStatus: "processing" };
+test("expo status maps KIE recordInfo results into generated photo URLs", async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.KIE_API_KEY = "test-kie";
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.startsWith("https://api.kie.ai/api/v1/jobs/recordInfo")) {
+      return new Response(
+        JSON.stringify({
+          code: 200,
+          data: {
+            taskId: "callback-task",
+            state: "success",
+            resultJson: JSON.stringify({ resultUrls: ["https://cdn.example.com/generated.png"] }),
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    return new Response("{}", { status: 200 });
+  };
 
-  const callback = await receiveKieCallback(
-    new Request("http://localhost:3000/api/kie/callback", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        code: 200,
-        data: {
-          taskId: "callback-task",
-          state: "success",
-          resultJson: JSON.stringify({ resultUrls: ["https://cdn.example.com/generated.png"] }),
-        },
-      }),
-    })
-  );
-  assert.equal(callback.status, 200);
+  try {
+    const job = sampleJob();
+    job.photos[0] = { ...job.photos[0], generationTaskId: "callback-task", generationStatus: "processing" };
 
-  const response = await refreshExpoAtlasStatus(
-    new Request("http://localhost:3000/api/expo-company-atlas/status", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ job }),
-    })
-  );
+    const response = await refreshExpoAtlasStatus(
+      new Request("http://localhost:3000/api/expo-company-atlas/status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ job }),
+      })
+    );
 
-  assert.equal(response.status, 200);
-  const payload = await response.json();
-  assert.equal(payload.job.photos[0].generationStatus, "success");
-  assert.equal(payload.job.photos[0].generatedUrl, "https://cdn.example.com/generated.png");
-  assert.match(payload.job.companies[0].markdown, /generated.png/);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.job.photos[0].generationStatus, "success");
+    assert.equal(payload.job.photos[0].generatedUrl, "https://cdn.example.com/generated.png");
+    assert.match(payload.job.companies[0].markdown, /generated.png/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("POST /api/expo-company-atlas/retry regenerates a failed photo", async () => {

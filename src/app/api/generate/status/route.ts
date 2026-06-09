@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { getKieImageStatus } from "@/lib/kie";
-import { getStoredJobStatus, setStoredJobStatus } from "@/lib/job-store";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -11,20 +10,7 @@ export async function GET(request: Request) {
     if (!taskId) {
       return NextResponse.json({ error: "taskId is required." }, { status: 400 });
     }
-    const webhookStatus = await getStoredJobStatus(taskId);
-    if (webhookStatus?.source === "webhook") {
-      return NextResponse.json(webhookStatus);
-    }
-
     const status = await getKieImageStatus(taskId);
-    await setStoredJobStatus({
-      taskId,
-      status: status.status,
-      resultUrl: status.resultUrl,
-      error: status.error,
-      updatedAt: new Date().toISOString(),
-      source: "polling",
-    });
     return NextResponse.json(status);
   } catch (error) {
     console.error("[generate/status]", error);

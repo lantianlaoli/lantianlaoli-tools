@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createKieImageTask, getKieCallbackUrl } from "@/lib/kie";
+import { createKieImageTask } from "@/lib/kie";
 import type { EcommerceAssetsJob, KieAspectRatio, KieResolution } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -70,7 +70,6 @@ export async function POST(request: Request) {
       inputUrls,
       aspectRatio: normalizeAspectRatio(job.imageAspectRatio),
       resolution: normalizeResolution(job.imageResolution),
-      callBackUrl: getKieCallbackUrl(),
     });
 
     return NextResponse.json({ taskId });

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Building2, Globe, Images, Layers3, MessageSquareText, Sparkles, Video } from "lucide-react";
+import { ArrowRight, Banknote, Building2, Globe, Images, Layers3, MessageSquareText, Sparkles, Video } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import {
   ECOMMERCE_LANGUAGE_STORAGE_KEY,
@@ -52,6 +52,14 @@ const features = {
       meta: "OpenRouter · XLSX · 评论标签",
       action: "打开工作台",
     },
+    {
+      href: "/fx-calculator",
+      title: "汇率加价计算器",
+      description: "输入人民币成本，按 3 档独立可调的加价倍数，一键算出每档的 RMB 和 USD 售价。",
+      icon: Banknote,
+      meta: "RMB · 3 档 · USD",
+      action: "打开计算器",
+    },
   ],
   en: [
     {
@@ -93,6 +101,14 @@ const features = {
       icon: MessageSquareText,
       meta: "OpenRouter · XLSX · Review Tags",
       action: "Open workspace",
+    },
+    {
+      href: "/fx-calculator",
+      title: "FX Markup Calculator",
+      description: "Enter a CNY cost, set three independent markup tiers, and get RMB and USD prices for each.",
+      icon: Banknote,
+      meta: "CNY · 3 tiers · USD",
+      action: "Open calculator",
     },
   ],
 } satisfies Record<EcommerceTextLanguage, Array<{

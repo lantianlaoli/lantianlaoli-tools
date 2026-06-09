@@ -11,10 +11,8 @@ import {
 } from "./expo-company-atlas";
 import {
   generateExpoAtlasJobId,
-  isExpoAtlasRedisAvailable,
 } from "./expo-company-atlas-store";
-import { createKieImageTask, getKieCallbackUrl, uploadKieImage } from "./kie";
-import { getStoredJobStatus } from "./job-store";
+import { createKieImageTask, getKieImageStatus, uploadKieImage } from "./kie";
 import type {
   ExpoAtlasCompany,
   ExpoAtlasJob,
@@ -62,8 +60,12 @@ async function refreshPhoto(photo: ExpoAtlasPhoto): Promise<ExpoAtlasPhoto> {
   if (!photo.generationTaskId || photo.generationStatus === "success" || photo.generationStatus === "fail") {
     return photo;
   }
-  const status = await getStoredJobStatus(photo.generationTaskId);
-  if (!status) return photo;
+  let status: Awaited<ReturnType<typeof getKieImageStatus>> | undefined;
+  try {
+    status = await getKieImageStatus(photo.generationTaskId);
+  } catch {
+    return photo;
+  }
   if (status.status === "success") {
     return {
       ...photo,
@@ -123,7 +125,7 @@ export async function createExpoAtlasJob(input: {
     photos: normalized.photos,
     companies: normalized.companies,
     error,
-    persistence: isExpoAtlasRedisAvailable() ? "redis" : "memory",
+    persistence: "memory",
     createdAt: now,
     updatedAt: now,
   });
@@ -192,7 +194,6 @@ export async function startExpoAtlasGeneration(input: {
     ? input.job.companies.filter((company) => company.id === input.companyId)
     : input.job.companies;
   const targetCompanyIds = new Set(targetCompanies.map((company) => company.id));
-  const callBackUrl = getKieCallbackUrl();
 
   const photos = await Promise.all(
     input.job.photos.map(async (photo) => {
@@ -208,7 +209,6 @@ export async function startExpoAtlasGeneration(input: {
         inputUrls: [photo.sourceUrl],
         aspectRatio: input.job.imageAspectRatio,
         resolution: input.job.imageResolution,
-        callBackUrl,
       });
 
       return {
@@ -249,8 +249,12 @@ async function refreshEnhancedPhoto(photo: ExpoAtlasPhoto): Promise<ExpoAtlasPho
   if (!photo.enhancedTaskId || photo.enhancedStatus === "success" || photo.enhancedStatus === "fail") {
     return photo;
   }
-  const status = await getStoredJobStatus(photo.enhancedTaskId);
-  if (!status) return photo;
+  let status: Awaited<ReturnType<typeof getKieImageStatus>> | undefined;
+  try {
+    status = await getKieImageStatus(photo.enhancedTaskId);
+  } catch {
+    return photo;
+  }
   if (status.status === "success") {
     return {
       ...photo,
@@ -279,7 +283,6 @@ export async function startExpoPhotoEnhancement(input: {
     ? input.job.companies.filter((company) => company.id === input.companyId)
     : input.job.companies;
   const targetCompanyIds = new Set(targetCompanies.map((company) => company.id));
-  const callBackUrl = getKieCallbackUrl();
 
   const photos = await Promise.all(
     input.job.photos.map(async (photo) => {
@@ -295,7 +298,6 @@ export async function startExpoPhotoEnhancement(input: {
         inputUrls: [photo.sourceUrl],
         aspectRatio: input.job.imageAspectRatio,
         resolution: input.job.imageResolution,
-        callBackUrl,
       });
 
       return {

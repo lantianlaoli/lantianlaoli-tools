@@ -163,7 +163,6 @@ export async function createKieImageTask(input: {
   inputUrls: string[];
   aspectRatio: KieAspectRatio;
   resolution: KieResolution;
-  callBackUrl?: string;
 }) {
   const response = await fetchWithRetry(CREATE_TASK_URL, {
     method: "POST",
@@ -173,7 +172,6 @@ export async function createKieImageTask(input: {
     },
     body: JSON.stringify({
       model: MODEL,
-      ...(input.callBackUrl ? { callBackUrl: input.callBackUrl } : {}),
       input: {
         prompt: input.prompt,
         input_urls: input.inputUrls.slice(0, 16),
@@ -200,7 +198,6 @@ export async function createKieSeedanceVideoTask(input: {
   aspectRatio: "1:1" | "16:9" | "9:16";
   resolution: "480p" | "720p";
   duration: number;
-  callBackUrl?: string;
 }) {
   const response = await fetchWithRetry(CREATE_TASK_URL, {
     method: "POST",
@@ -210,7 +207,6 @@ export async function createKieSeedanceVideoTask(input: {
     },
     body: JSON.stringify({
       model: SEEDANCE_2_FAST_MODEL,
-      ...(input.callBackUrl ? { callBackUrl: input.callBackUrl } : {}),
       input: {
         prompt: input.prompt,
         reference_image_urls: input.referenceImageUrls.filter(Boolean).slice(0, 9),
@@ -233,11 +229,6 @@ export async function createKieSeedanceVideoTask(input: {
     throw new Error(payload?.msg || "KIE Seedance task creation did not return a taskId.");
   }
   return taskId;
-}
-
-export function getKieCallbackUrl() {
-  const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || "").trim().replace(/\/+$/, "");
-  return baseUrl ? `${baseUrl}/api/kie/callback` : undefined;
 }
 
 export function normalizeKieRecordInfo(payload: KieRecordInfo) {
@@ -282,5 +273,3 @@ export async function getKieImageStatus(taskId: string) {
 
   return normalizeKieRecordInfo(payload);
 }
-
-export const getKieTaskStatus = getKieImageStatus;

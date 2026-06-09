@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createKieImageTask, getKieCallbackUrl, uploadKieImage } from "@/lib/kie";
+import { createKieImageTask, uploadKieImage } from "@/lib/kie";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -67,7 +67,6 @@ export async function POST(request: Request) {
       inputUrls: [resultUrl, ...localImageUrls],
       aspectRatio: "1:1",
       resolution: "1K",
-      callBackUrl: getKieCallbackUrl(),
     });
 
     return NextResponse.json({ taskId });

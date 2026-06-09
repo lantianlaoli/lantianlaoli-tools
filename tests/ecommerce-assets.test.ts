@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { POST as createEcommerceAssets } from "../src/app/api/ecommerce-assets/create/route";
-import { POST as receiveKieCallback } from "../src/app/api/kie/callback/route";
 import { POST as retryEcommerceAsset } from "../src/app/api/ecommerce-assets/retry/route";
 import { POST as refreshEcommerceAssetsStatus } from "../src/app/api/ecommerce-assets/status/route";
 import { getEcommerceVideoPresentation } from "../src/lib/ecommerce-assets-presentation";
@@ -172,7 +171,7 @@ test("POST /api/ecommerce-assets/create uploads the photo and starts image tasks
     assert.equal(createTaskBodies.length, 13);
     assert.equal(createTaskBodies.filter((body) => body.model === "gpt-image-2-image-to-image").length, 13);
     assert.equal(createTaskBodies.every((body) => body.input.aspect_ratio === "1:1"), true);
-    assert.equal(createTaskBodies.every((body) => body.callBackUrl === "https://rivora.example.com/api/kie/callback"), true);
+    assert.equal(createTaskBodies.every((body) => body.callBackUrl === undefined), true);
     assert.equal(payload.job.carouselImages[0].taskId, "task-1");
     assert.equal(payload.job.video.storyboardTaskId, "task-13");
   } finally {
@@ -430,25 +429,42 @@ test("POST /api/ecommerce-assets/create rejects too many manufacturer promos", a
   assert.deepEqual(await response.json(), { error: "Upload up to 6 manufacturer promo images." });
 });
 
-async function sendKieSuccess(taskId: string, resultUrl: string) {
-  const response = await receiveKieCallback(
-    new Request("http://localhost:3000/api/kie/callback", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        code: 200,
-        data: {
-          taskId,
-          state: "success",
-          resultJson: JSON.stringify({ resultUrls: [resultUrl] }),
-        },
-      }),
-    })
-  );
-  assert.equal(response.status, 200);
+async function mockKieRecordInfo(recordInfoBody: Map<string, string>) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.startsWith("https://api.kie.ai/api/v1/jobs/recordInfo")) {
+      const taskId = new URL(url).searchParams.get("taskId") ?? "";
+      const resultUrl = recordInfoBody.get(taskId) ?? `https://cdn.example.com/${taskId}.png`;
+      return new Response(
+        JSON.stringify({
+          code: 200,
+          data: {
+            taskId,
+            state: "success",
+            resultJson: JSON.stringify({ resultUrls: [resultUrl] }),
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    return originalFetch(input, init);
+  };
+  return () => {
+    globalThis.fetch = originalFetch;
+  };
 }
 
-test("POST /api/ecommerce-assets/status advances successful image and video tasks from KIE callbacks", async () => {
+async function sendKieSuccess(
+  taskId: string,
+  resultUrl: string,
+  previousRestore?: () => void
+) {
+  previousRestore?.();
+  return mockKieRecordInfo(new Map([[taskId, resultUrl]]));
+}
+
+test("POST /api/ecommerce-assets/status advances successful image and video tasks from KIE polling", async () => {
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
   const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
@@ -483,6 +499,25 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
         headers: { "content-type": "application/json" },
       });
     }
+    if (url.startsWith("https://api.kie.ai/api/v1/jobs/recordInfo")) {
+      const taskId = new URL(url).searchParams.get("taskId") ?? "";
+      const resultUrl = taskId === "video-task"
+        ? "https://cdn.example.com/video-task.mp4"
+        : taskId.startsWith("carousel-1-") || taskId.startsWith("detail-")
+          ? `https://cdn.example.com/${taskId}.png`
+          : `https://cdn.example.com/${taskId}.png`;
+      return new Response(
+        JSON.stringify({
+          code: 200,
+          data: {
+            taskId,
+            state: "success",
+            resultJson: JSON.stringify({ resultUrls: [resultUrl] }),
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
     throw new Error(`Unexpected fetch: ${url}`);
   };
 
@@ -495,10 +530,6 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
       })
     );
     const createPayload = await createResponse.json();
-    for (const slot of [...createPayload.job.carouselImages, ...createPayload.job.detailImages]) {
-      await sendKieSuccess(slot.taskId, `https://cdn.example.com/${slot.taskId}.png`);
-    }
-    await sendKieSuccess(createPayload.job.video.storyboardTaskId, "https://cdn.example.com/storyboard.png");
 
     const firstStatusResponse = await refreshEcommerceAssetsStatus(
       new Request("http://localhost:3000/api/ecommerce-assets/status", {
@@ -512,10 +543,10 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
     assert.equal(firstStatus.job.carouselImages.every((slot: { status: string }) => slot.status === "success"), true);
     assert.equal(firstStatus.job.detailImages.every((slot: { status: string }) => slot.status === "success"), true);
     assert.equal(firstStatus.job.video.status, "processing");
-    assert.equal(firstStatus.job.video.storyboardUrl, "https://cdn.example.com/storyboard.png");
+    assert.equal(firstStatus.job.video.storyboardUrl?.length > 0, true);
+    assert.match(firstStatus.job.video.storyboardUrl, /^https:\/\/cdn\.example\.com\//);
     assert.equal(createTaskBodies.at(-1)?.model, "bytedance/seedance-2-fast");
-    assert.equal(createTaskBodies.at(-1)?.callBackUrl, "https://rivora.example.com/api/kie/callback");
-    await sendKieSuccess("video-task", "https://cdn.example.com/video-task.mp4");
+    assert.equal(createTaskBodies.at(-1)?.callBackUrl, undefined);
 
     const secondStatusResponse = await refreshEcommerceAssetsStatus(
       new Request("http://localhost:3000/api/ecommerce-assets/status", {
@@ -539,7 +570,7 @@ test("POST /api/ecommerce-assets/status advances successful image and video task
   }
 });
 
-test("POST /api/ecommerce-assets/status advances a video-only job from storyboard callback", async () => {
+test("POST /api/ecommerce-assets/status advances a video-only job from polling", async () => {
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
   const originalOpenRouterApiKey = process.env.OPENROUTER_API_KEY;
@@ -575,6 +606,7 @@ test("POST /api/ecommerce-assets/status advances a video-only job from storyboar
     throw new Error(`Unexpected fetch: ${url}`);
   };
 
+  let restoreRecordInfo: (() => void) | undefined;
   try {
     const createResponse = await createEcommerceAssets(
       new Request("http://localhost:3000/api/ecommerce-assets/create", {
@@ -586,7 +618,7 @@ test("POST /api/ecommerce-assets/status advances a video-only job from storyboar
     const createPayload = await createResponse.json();
     assert.equal(createPayload.job.carouselImages.length, 0);
     assert.equal(createPayload.job.detailImages.length, 0);
-    await sendKieSuccess(createPayload.job.video.storyboardTaskId, "https://cdn.example.com/video-only-storyboard.png");
+    restoreRecordInfo = await sendKieSuccess(createPayload.job.video.storyboardTaskId, "https://cdn.example.com/video-only-storyboard.png");
 
     const firstStatusResponse = await refreshEcommerceAssetsStatus(
       new Request("http://localhost:3000/api/ecommerce-assets/status", {
@@ -600,7 +632,7 @@ test("POST /api/ecommerce-assets/status advances a video-only job from storyboar
     assert.equal(firstStatus.job.video.taskId, "video-only-task");
     assert.equal(firstStatus.job.status, "processing");
 
-    await sendKieSuccess("video-only-task", "https://cdn.example.com/video-only.mp4");
+    restoreRecordInfo = await sendKieSuccess("video-only-task", "https://cdn.example.com/video-only.mp4", restoreRecordInfo);
     const secondStatusResponse = await refreshEcommerceAssetsStatus(
       new Request("http://localhost:3000/api/ecommerce-assets/status", {
         method: "POST",
@@ -612,6 +644,7 @@ test("POST /api/ecommerce-assets/status advances a video-only job from storyboar
     assert.equal(secondStatus.job.video.status, "success");
     assert.equal(secondStatus.job.status, "completed");
   } finally {
+    restoreRecordInfo?.();
     globalThis.fetch = originalFetch;
     if (originalKieApiKey === undefined) delete process.env.KIE_API_KEY;
     else process.env.KIE_API_KEY = originalKieApiKey;
@@ -622,7 +655,7 @@ test("POST /api/ecommerce-assets/status advances a video-only job from storyboar
   }
 });
 
-test("POST /api/ecommerce-assets/retry recreates a failed image task with callback", async () => {
+test("POST /api/ecommerce-assets/retry recreates a failed image task with no webhook callback", async () => {
   const originalFetch = globalThis.fetch;
   const originalKieApiKey = process.env.KIE_API_KEY;
   const originalSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
@@ -677,7 +710,7 @@ test("POST /api/ecommerce-assets/retry recreates a failed image task with callba
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { taskId: "retry-task" });
-    assert.equal(createTaskBody?.callBackUrl, "https://rivora.example.com/api/kie/callback");
+    assert.equal(createTaskBody?.callBackUrl, undefined);
     assert.deepEqual(createTaskBody?.input?.input_urls, ["https://cdn.example.com/product.png"]);
   } finally {
     globalThis.fetch = originalFetch;

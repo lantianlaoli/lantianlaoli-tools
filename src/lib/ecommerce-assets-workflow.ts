@@ -17,10 +17,9 @@ import { normalizeEcommerceTextLanguage } from "./ecommerce-language";
 import {
   createKieImageTask,
   createKieSeedanceVideoTask,
-  getKieCallbackUrl,
+  getKieImageStatus,
   uploadKieImage,
 } from "./kie";
-import { getStoredJobStatus } from "./job-store";
 import type {
   EcommerceAssetScope,
   EcommerceAssetScopeOption,
@@ -37,6 +36,14 @@ import type {
 
 function isTerminal(status: EcommerceSlotStatus) {
   return status === "success" || status === "fail";
+}
+
+async function safeGetKieStatus(taskId: string) {
+  try {
+    return await getKieImageStatus(taskId);
+  } catch {
+    return undefined;
+  }
 }
 
 export function normalizeEcommerceAssetScope(value: unknown): EcommerceAssetScope {
@@ -117,7 +124,6 @@ async function createImageSlots(input: {
     return includesDetail(input.assetScopes);
   });
   const slots: EcommerceImageSlot[] = [];
-  const callBackUrl = getKieCallbackUrl();
 
   for (const promptSlot of promptSlots) {
     const taskId = await createKieImageTask({
@@ -125,7 +131,6 @@ async function createImageSlots(input: {
       inputUrls: input.productImageUrls,
       aspectRatio: input.imageAspectRatio,
       resolution: input.imageResolution,
-      callBackUrl,
     });
     slots.push({
       id: `${promptSlot.kind}-${promptSlot.index}`,
@@ -155,7 +160,6 @@ async function createManufacturerPromoImageSlots(input: {
   brandLogoHostedUrl?: string;
   brandLogoNote?: string;
 }) {
-  const callBackUrl = getKieCallbackUrl();
   const results = await Promise.all(
     input.manufacturerPromoImageUrls.map(async (imageUrl, index) => {
       let analysis;
@@ -185,7 +189,6 @@ async function createManufacturerPromoImageSlots(input: {
         inputUrls,
         aspectRatio: input.imageAspectRatio,
         resolution: input.imageResolution,
-        callBackUrl,
       });
       const slot: EcommerceImageSlot = {
         id: `manufacturer-carousel-${index + 1}`,
@@ -376,7 +379,6 @@ export async function createEcommerceAssetsJob(input: {
           inputUrls: productImageUrls,
           aspectRatio: videoAspectRatio,
           resolution: imageResolution,
-          callBackUrl: getKieCallbackUrl(),
         })
       : undefined;
 
@@ -404,8 +406,12 @@ export async function createEcommerceAssetsJob(input: {
 
 async function refreshImageSlot(slot: EcommerceImageSlot): Promise<EcommerceImageSlot> {
   if (isTerminal(slot.status) || !slot.taskId) return slot;
-  const status = await getStoredJobStatus(slot.taskId);
-  if (!status) return slot;
+  let status: Awaited<ReturnType<typeof getKieImageStatus>> | undefined;
+  try {
+    status = await getKieImageStatus(slot.taskId);
+  } catch {
+    return slot;
+  }
   if (status.status === "success") {
     return { ...slot, status: "success", resultUrl: status.resultUrl };
   }
@@ -422,7 +428,7 @@ export async function refreshEcommerceAssetsJob(currentJob: EcommerceAssetsJob):
   const needsVideo = includesVideo(activeScopes(currentJob));
 
   if (needsVideo && video.storyboardTaskId && !video.storyboardUrl && video.status !== "fail") {
-    const storyboardStatus = await getStoredJobStatus(video.storyboardTaskId);
+    const storyboardStatus = await safeGetKieStatus(video.storyboardTaskId);
     if (storyboardStatus?.status === "success" && storyboardStatus.resultUrl) {
       video = { ...video, storyboardUrl: storyboardStatus.resultUrl, status: "processing" };
     } else if (storyboardStatus?.status === "fail") {
@@ -452,11 +458,10 @@ export async function refreshEcommerceAssetsJob(currentJob: EcommerceAssetsJob):
       aspectRatio: videoAspect,
       resolution: videoRes,
       duration: 15,
-      callBackUrl: getKieCallbackUrl(),
     });
     video = { ...video, taskId, status: "processing" };
   } else if (video.taskId && !isTerminal(video.status)) {
-    const videoStatus = await getStoredJobStatus(video.taskId);
+    const videoStatus = await safeGetKieStatus(video.taskId);
     if (!videoStatus) {
       const updated = {
         ...currentJob,

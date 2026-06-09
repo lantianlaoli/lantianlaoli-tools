@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createKieImageTask, getKieCallbackUrl, uploadKieImage } from "@/lib/kie";
-import { setStoredJobStatus } from "@/lib/job-store";
+import { createKieImageTask, uploadKieImage } from "@/lib/kie";
 import type { GenerationJob, KieAspectRatio, KieResolution } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -115,14 +114,6 @@ export async function POST(request: Request) {
       inputUrls: [resultUrl, ...localImageUrls],
       aspectRatio,
       resolution,
-      callBackUrl: getKieCallbackUrl(),
-    });
-
-    await setStoredJobStatus({
-      taskId,
-      status: "waiting",
-      updatedAt: new Date().toISOString(),
-      source: "polling",
     });
 
     const replacementJob: GenerationJob = {
