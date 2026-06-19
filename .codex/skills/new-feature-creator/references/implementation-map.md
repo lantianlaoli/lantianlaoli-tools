@@ -1,4 +1,4 @@
-# Rivora Mini Tool Implementation Map
+# New Feature Implementation Map
 
 ## Existing Tool Patterns
 

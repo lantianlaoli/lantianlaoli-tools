@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Banknote, Building2, Globe, Images, Layers3, MessageSquareText, Sparkles, Video } from "lucide-react";
+import { ArrowRight, Banknote, Building2, Globe, Images, Layers3, MessageSquareText, Palette, Sparkles, Video } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import {
   ECOMMERCE_LANGUAGE_STORAGE_KEY,
@@ -26,6 +26,14 @@ const features = {
       description: "上传产品照片，自动生成轮播图、详情图和 1 条广告短片。",
       icon: Sparkles,
       meta: "Image2 · Seedance 2 Fast · 多比例",
+      action: "打开工作台",
+    },
+    {
+      href: "/social-cover-generator",
+      title: "社媒中英文封面生成器",
+      description: "上传人物和产品或 Logo，自动生成中文、英文、横版和竖版社媒封面。",
+      icon: Palette,
+      meta: "Image2 · 中英双语 · 4:3 / 3:4",
       action: "打开工作台",
     },
     {
@@ -76,6 +84,14 @@ const features = {
       description: "Upload product photos, then generate carousel images, detail images, and an ad video in one flow.",
       icon: Sparkles,
       meta: "Image2 · Seedance 2 Fast · Multi-ratio",
+      action: "Open workspace",
+    },
+    {
+      href: "/social-cover-generator",
+      title: "Bilingual Social Cover Generator",
+      description: "Upload a person and product or logo, then generate Chinese, English, horizontal, and vertical social covers.",
+      icon: Palette,
+      meta: "Image2 · Bilingual · 4:3 / 3:4",
       action: "Open workspace",
     },
     {

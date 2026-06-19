@@ -1,13 +1,13 @@
 ---
-name: rivora-tool-creator
-description: Create or extend Rivora project mini tools. Use when adding a new workspace/tool to this repository, expanding a KIE/OpenRouter-powered generation flow, wiring a new Next.js page plus API routes, or turning a new image/video/content generation requirement into the same structure as the existing bulk-clone and ecommerce-assets tools.
+name: new-feature-creator
+description: Create or extend new features in this repository. Use when adding a new workspace/tool, expanding a KIE/OpenRouter-powered generation flow, wiring a new Next.js page plus API routes, or turning a new image/video/content generation requirement into the same structure as the existing bulk-clone and ecommerce-assets tools.
 ---
 
-# Rivora Tool Creator
+# New Feature Creator
 
 ## Purpose
 
-Use this skill to add a new small tool to Rivora quickly while matching the two existing tools:
+Use this skill to add a new feature or small tool quickly while matching the existing tools:
 
 - `bulk-clone`: XLSX-driven batch image generation.
 - `ecommerce-assets`: product-photo-driven image and video generation.
@@ -18,11 +18,11 @@ Keep the result as an actual usable workspace, not a marketing page.
 
 1. Restate the requested tool as a concrete workflow: inputs, generated outputs, user controls, job lifecycle, downloads, retry/regenerate behavior, and language requirements.
 2. Inspect the existing implementation before editing:
-   - [src/app/page.tsx](/Users/lantianlaoli/projects/Rivora/src/app/page.tsx)
-   - [src/app/bulk-clone/page.tsx](/Users/lantianlaoli/projects/Rivora/src/app/bulk-clone/page.tsx)
-   - [src/app/ecommerce-assets/page.tsx](/Users/lantianlaoli/projects/Rivora/src/app/ecommerce-assets/page.tsx)
-   - [src/lib/kie.ts](/Users/lantianlaoli/projects/Rivora/src/lib/kie.ts)
-   - [src/lib/types.ts](/Users/lantianlaoli/projects/Rivora/src/lib/types.ts)
+   - [src/app/page.tsx](/Users/lantianlaoli/projects/lantianlaoli-tools/src/app/page.tsx)
+   - [src/app/bulk-clone/page.tsx](/Users/lantianlaoli/projects/lantianlaoli-tools/src/app/bulk-clone/page.tsx)
+   - [src/app/ecommerce-assets/page.tsx](/Users/lantianlaoli/projects/lantianlaoli-tools/src/app/ecommerce-assets/page.tsx)
+   - [src/lib/kie.ts](/Users/lantianlaoli/projects/lantianlaoli-tools/src/lib/kie.ts)
+   - [src/lib/types.ts](/Users/lantianlaoli/projects/lantianlaoli-tools/src/lib/types.ts)
 3. Read [references/implementation-map.md](references/implementation-map.md) when the request requires implementation.
 4. For Next.js APIs, read the relevant guide in `node_modules/next/dist/docs/` before changing routes, server actions, runtime settings, metadata, or app routing.
 5. For external libraries, SDKs, APIs, or CLI behavior, follow the repository `AGENTS.md` rule and fetch current docs with `npx ctx7@latest library ...` then `npx ctx7@latest docs ...`.
@@ -54,7 +54,7 @@ Keep the result as an actual usable workspace, not a marketing page.
 ## UI Rules
 
 - Build a dense, usable workstation as the first screen.
-- Match the current dark Rivora visual system: restrained panels, lime highlights, compact controls, and lucide icons.
+- Match the current dark visual system: restrained panels, lime highlights, compact controls, and lucide icons.
 - Use feature-complete states: empty, uploading/preparing, processing, success, partial failure, retry/regenerate, and download.
 - Keep controls ergonomic: tabs or segmented controls for modes, icon buttons for repeated actions, file drop/upload surfaces for assets, and progress indicators for long jobs.
 - Avoid nested cards and decorative-only sections.

@@ -170,6 +170,68 @@ export type EcommerceAssetsJob = {
   updatedAt: number;
 };
 
+export type SocialCoverLanguage = EcommerceTextLanguage;
+export type SocialCoverAspectRatio = KieAspectRatio;
+export type SocialCoverVariantCount = 1 | 2 | 4;
+export type SocialCoverSlotStatus = EcommerceSlotStatus;
+
+export type SocialCoverStylePreset = {
+  id: string;
+  name: string;
+  prompt: string;
+};
+
+export type SocialCoverTitleSet = Record<SocialCoverLanguage, string>;
+
+export type SocialCoverCreateRequest = {
+  personImageDataUrl: string;
+  productOrLogoImageDataUrl: string;
+  title: string;
+  styleGuide?: string;
+  languages?: SocialCoverLanguage[];
+  aspectRatiosByLanguage?: Partial<Record<SocialCoverLanguage, SocialCoverAspectRatio[]>>;
+  aspectRatios?: SocialCoverAspectRatio[];
+  variantsPerGroup?: SocialCoverVariantCount;
+  resolution?: KieResolution;
+};
+
+export type SocialCoverOptions = {
+  languages: SocialCoverLanguage[];
+  aspectRatiosByLanguage: Record<SocialCoverLanguage, SocialCoverAspectRatio[]>;
+  aspectRatios: SocialCoverAspectRatio[];
+  variantsPerGroup: SocialCoverVariantCount;
+  resolution: KieResolution;
+};
+
+export type SocialCoverSlot = {
+  id: string;
+  language: SocialCoverLanguage;
+  aspectRatio: SocialCoverAspectRatio;
+  variantIndex: number;
+  title: string;
+  taskId: string;
+  status: SocialCoverSlotStatus;
+  resultUrl?: string;
+  error?: string;
+  prompt: string;
+};
+
+export type SocialCoverJob = {
+  id: string;
+  status: "preparing" | "processing" | "completed" | "failed";
+  sourceTitle: string;
+  titles: SocialCoverTitleSet;
+  titleFallback: boolean;
+  styleGuide?: string;
+  options: SocialCoverOptions;
+  personImageUrl?: string;
+  productOrLogoImageUrl?: string;
+  slots: SocialCoverSlot[];
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type ExpoPhotoKind = "company_intro" | "product" | "contact" | "mixed" | "unknown";
 
 export type ExpoAtlasSlotStatus = "waiting" | "processing" | "success" | "fail";

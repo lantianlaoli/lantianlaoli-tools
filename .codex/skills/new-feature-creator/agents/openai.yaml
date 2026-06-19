@@ -1,0 +1,7 @@
+interface:
+  display_name: "New Feature Creator"
+  short_description: "Add new features consistently"
+  default_prompt: "Use $new-feature-creator to add a new feature that matches the existing project workflow."
+
+policy:
+  allow_implicit_invocation: true
