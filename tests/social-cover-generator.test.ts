@@ -370,13 +370,32 @@ test("POST /api/social-cover-generator/retry recreates a failed slot from hosted
       })
     );
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { success: true, taskId: "retry-task" });
+    assert.deepEqual(await response.json(), {
+      success: true,
+      taskId: "retry-task",
+      retryOfTaskId: "task-en",
+      creditCharged: false,
+      billingMode: "system-retry-no-credit",
+    });
     assert.deepEqual(createTaskBody?.input?.input_urls, ["https://cdn.example.com/person.png", "https://cdn.example.com/logo.png"]);
     assert.equal(createTaskBody?.input?.aspect_ratio, "3:4");
   } finally {
     globalThis.fetch = originalFetch;
     restoreEnv("KIE_API_KEY", originalKieApiKey);
   }
+});
+
+test("POST /api/social-cover-generator/retry rejects non-failed slots so user retries are not free", async () => {
+  const response = await retrySocialCover(
+    new Request("http://localhost:3000/api/social-cover-generator/retry", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ job: sampleJob(), slotId: "cover-zh-4:3-1" }),
+    })
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "Only failed system slots can be retried without credits." });
 });
 
 test("POST /api/social-cover-generator/regenerate uses current result plus uploaded references", async () => {

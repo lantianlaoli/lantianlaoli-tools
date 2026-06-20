@@ -181,6 +181,8 @@ export type SocialCoverStylePreset = {
   prompt: string;
 };
 
+export type SocialCoverBillingMode = "initial" | "system-retry-no-credit" | "user-regeneration";
+
 export type SocialCoverTitleSet = Record<SocialCoverLanguage, string>;
 
 export type SocialCoverCreateRequest = {
@@ -214,6 +216,10 @@ export type SocialCoverSlot = {
   resultUrl?: string;
   error?: string;
   prompt: string;
+  billingMode?: SocialCoverBillingMode;
+  creditCharged?: boolean;
+  retryOfTaskId?: string;
+  systemRetryCount?: number;
 };
 
 export type SocialCoverJob = {

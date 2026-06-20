@@ -297,6 +297,8 @@ export function buildSocialCoverSlots(input: {
           taskId: input.taskIds[taskIndex] ?? "",
           status: "waiting",
           prompt,
+          billingMode: "initial",
+          creditCharged: true,
         });
         taskIndex += 1;
       }

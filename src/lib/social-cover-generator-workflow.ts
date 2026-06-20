@@ -132,16 +132,26 @@ export async function retrySocialCoverSlot(input: {
 }) {
   const slot = input.job.slots.find((candidate) => candidate.id === input.slotId);
   if (!slot) throw new Error("Cover slot was not found.");
+  if (slot.status !== "fail") {
+    throw new Error("Only failed system slots can be retried without credits.");
+  }
   if (!input.job.personImageUrl || !input.job.productOrLogoImageUrl) {
     throw new Error("Hosted source image URLs are required.");
   }
-  return createSlotTask({
+  const retryOfTaskId = slot.taskId;
+  const taskId = await createSlotTask({
     prompt: slot.prompt,
     personImageUrl: input.job.personImageUrl,
     productOrLogoImageUrl: input.job.productOrLogoImageUrl,
     aspectRatio: slot.aspectRatio,
     resolution: input.job.options.resolution,
   });
+  return {
+    taskId,
+    retryOfTaskId,
+    creditCharged: false,
+    billingMode: "system-retry-no-credit" as const,
+  };
 }
 
 export function buildSocialCoverRegenerationPrompt(input: {

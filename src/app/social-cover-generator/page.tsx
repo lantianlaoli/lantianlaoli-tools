@@ -469,7 +469,19 @@ export default function SocialCoverGeneratorPage() {
         ...job,
         status: "processing",
         slots: job.slots.map((item) =>
-          item.id === slot.id ? { ...item, taskId: payload.taskId, status: "waiting", resultUrl: undefined, error: undefined } : item
+          item.id === slot.id
+            ? {
+                ...item,
+                taskId: payload.taskId,
+                status: "waiting",
+                resultUrl: undefined,
+                error: undefined,
+                billingMode: payload.billingMode || "system-retry-no-credit",
+                creditCharged: payload.creditCharged === true ? true : false,
+                retryOfTaskId: payload.retryOfTaskId || item.taskId,
+                systemRetryCount: (item.systemRetryCount ?? 0) + 1,
+              }
+            : item
         ),
       });
       setStatus("polling");
@@ -506,7 +518,16 @@ export default function SocialCoverGeneratorPage() {
         status: "processing",
         slots: job.slots.map((item) =>
           item.id === regenerateSlot.id
-            ? { ...item, taskId: payload.taskId, prompt: payload.prompt || item.prompt, status: "waiting", resultUrl: undefined, error: undefined }
+            ? {
+                ...item,
+                taskId: payload.taskId,
+                prompt: payload.prompt || item.prompt,
+                status: "waiting",
+                resultUrl: undefined,
+                error: undefined,
+                billingMode: "user-regeneration",
+                creditCharged: true,
+              }
             : item
         ),
       });
