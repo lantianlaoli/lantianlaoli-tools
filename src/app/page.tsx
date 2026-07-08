@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Banknote, Building2, Globe, Images, Layers3, MessageSquareText, Palette, Sparkles, Video } from "lucide-react";
+import { ArrowRight, Banknote, BellRing, Building2, Globe, Images, Layers3, MessageSquareText, Palette, Sparkles, Video } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import {
   ECOMMERCE_LANGUAGE_STORAGE_KEY,
@@ -68,6 +68,14 @@ const features = {
       meta: "批发价 · 倍率 · USD",
       action: "打开工具",
     },
+    {
+      href: "/codex-reset-notifier",
+      title: "Codex Reset 通知器",
+      description: "监听 Tibo、Sam 和 OpenAI 在 X 上发布的 Codex reset、banked reset 与额度公告。",
+      icon: BellRing,
+      meta: "X API · Reset · 通知",
+      action: "打开工作台",
+    },
   ],
   en: [
     {
@@ -125,6 +133,14 @@ const features = {
       icon: Banknote,
       meta: "Wholesale · Markup · USD",
       action: "Open tool",
+    },
+    {
+      href: "/codex-reset-notifier",
+      title: "Codex Reset Notifier",
+      description: "Watch Tibo, Sam, and OpenAI on X for Codex reset, banked reset, and usage-limit announcements.",
+      icon: BellRing,
+      meta: "X API · Reset · Alerts",
+      action: "Open workspace",
     },
   ],
 } satisfies Record<EcommerceTextLanguage, Array<{

@@ -416,3 +416,41 @@ export type ShenzhenExpoHunterJob = {
   createdAt: number;
   updatedAt: number;
 };
+
+export type CodexResetNotifierSettings = {
+  accounts: string[];
+  keywords: string[];
+  maxResults: number;
+};
+
+export type CodexResetNotice = {
+  id: string;
+  text: string;
+  authorId: string;
+  username: string;
+  name: string;
+  createdAt: string;
+  url: string;
+  matchedKeywords: string[];
+};
+
+export type CodexResetNotifierStatus =
+  | "idle"
+  | "checking"
+  | "success"
+  | "empty"
+  | "error"
+  | "rate_limited"
+  | "config_error";
+
+export type CodexResetNotifierResponse = {
+  success: boolean;
+  notices: CodexResetNotice[];
+  checkedAt: string;
+  rateLimit?: {
+    limit?: string;
+    remaining?: string;
+    reset?: string;
+  };
+  error?: string;
+};
