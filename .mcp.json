@@ -1,10 +1,5 @@
 {
   "mcpServers": {
-    "xapi": {
-      "command": "node",
-      "args": ["scripts/x-mcp.mjs"],
-      "startup_timeout_sec": 300
-    },
     "x-docs": {
       "url": "https://docs.x.com/mcp"
     }

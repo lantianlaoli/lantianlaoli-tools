@@ -67,6 +67,60 @@ export type TextBlock = {
 
 export type EcommerceTextLanguage = "en" | "zh";
 
+export type TikTokPricingCountry = "SG" | "MY" | "TH" | "VN" | "PH";
+export type TikTokPricingMarket = TikTokPricingCountry;
+export type TikTokPricingRegion = "default" | "west" | "east" | "zone-a" | "zone-b" | "zone-c" | "zone-d" | "manila" | "other";
+export type TikTokPricingChannel = "Standard" | "Economy";
+export type TikTokPricingMarketInput = {
+  country: TikTokPricingCountry;
+  currency: "SGD" | "MYR" | "THB" | "VND" | "PHP";
+  exchangeRateRmbPerLocal: number;
+  commissionRate: number;
+  transactionRate: number;
+  supportFee: number;
+  region: TikTokPricingRegion;
+  channel: TikTokPricingChannel;
+  includeLocalDeliveryCost: boolean;
+  logisticsOverride?: number;
+};
+export type TikTokPricingRequest = {
+  productCostRmb: number;
+  packagingCostRmb: number;
+  weightG: number;
+  buyerPayPercent: number;
+  targetMarginPercent: number;
+  affiliateRate: number;
+  market: TikTokPricingMarketInput;
+};
+export type TikTokPricingMarketResult = {
+  country: TikTokPricingCountry;
+  currency: "SGD" | "MYR" | "THB" | "VND" | "PHP";
+  chargeableWeightG: number;
+  logistics: number;
+  costLocal: number;
+  totalFeeRate: number;
+  breakEvenPrice: number;
+  targetPrice: number;
+  stablePrice: number;
+  suggestedPrice: number;
+  discountedPrice: number;
+  estimatedProfit: number;
+  feesAtSuggestedPrice: number;
+  freightBasis: string;
+  warnings: string[];
+};
+export type TikTokPricingCalculation = {
+  buyerPayRatio: number;
+  results: TikTokPricingMarketResult[];
+};
+export type TikTokPricingAiRecommendation = {
+  headline: string;
+  recommendation: string;
+  reasons: string[];
+  risks: string[];
+  priceAdjustments: Array<{ country: TikTokPricingCountry; suggestedPrice: number; rationale: string }>;
+};
+
 export type EcommerceAssetKind = "carousel" | "detail" | "videoStoryboard" | "video";
 export type EcommerceAssetScope = "all" | "carousel" | "detail" | "video";
 export type EcommerceAssetScopeOption = Exclude<EcommerceAssetScope, "all">;

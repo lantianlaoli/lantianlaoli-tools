@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Banknote, BellRing, Building2, Globe, Images, Layers3, MessageSquareText, Palette, Sparkles, Video } from "lucide-react";
+import { ArrowRight, Banknote, BellRing, Building2, Calculator, Globe, Images, Layers3, MessageSquareText, Palette, Sparkles, Video } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import {
   ECOMMERCE_LANGUAGE_STORAGE_KEY,
@@ -69,6 +69,14 @@ const features = {
       action: "打开工具",
     },
     {
+      href: "/tiktok-pricing",
+      title: "TikTok 定价建议",
+      description: "先选择目标国家，再输入成本、尺寸、重量和折扣力度，计算保本线并让大模型给出合理挂牌价。",
+      icon: Calculator,
+      meta: "多国家 · 运费价卡 · AI 建议",
+      action: "打开工作台",
+    },
+    {
       href: "/codex-reset-notifier",
       title: "Codex Reset 通知器",
       description: "监听 Tibo、Sam 和 OpenAI 在 X 上发布的 Codex reset、banked reset 与额度公告。",
@@ -133,6 +141,14 @@ const features = {
       icon: Banknote,
       meta: "Wholesale · Markup · USD",
       action: "Open tool",
+    },
+    {
+      href: "/tiktok-pricing",
+      title: "TikTok Pricing Advisor",
+      description: "Choose a target country, enter cost, dimensions, weight, and discount, then calculate the floor price and get an AI recommendation.",
+      icon: Calculator,
+      meta: "Multi-country · Freight · AI",
+      action: "Open workspace",
     },
     {
       href: "/codex-reset-notifier",
