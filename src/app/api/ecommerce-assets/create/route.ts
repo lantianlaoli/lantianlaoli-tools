@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ECOMMERCE_REFERENCE_ROLE_MAX_COUNTS, getEcommerceCarouselSlots } from "@/lib/ecommerce-assets";
 import { createEcommerceAssetsJob } from "@/lib/ecommerce-assets-workflow";
 
 export const runtime = "nodejs";
@@ -7,85 +8,36 @@ export const maxDuration = 300;
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
-      sourceMode?: unknown;
-      productPhotoDataUrls?: string[];
-      productPhotoDataUrl?: string;
-      manufacturerPromoDataUrls?: string[];
-      petPhotoDataUrls?: { front?: string | null; side?: string | null; back?: string | null };
-      petReplacementEnabled?: boolean;
-      brandLogoDataUrl?: string | null;
-      brandLogoEnabled?: boolean;
-      brandLogoCorner?: string;
-      customRequirements?: string;
-      textLanguage?: unknown;
-      imageResolution?: string;
-      imageAspectRatio?: string;
-      videoAspectRatio?: string;
-      videoResolution?: string;
-      assetScope?: unknown;
-      assetScopes?: unknown;
+      productSkuDataUrls?: string[];
+      primarySkuIndex?: number;
+      manufacturerReferenceGroups?: unknown;
+      selectedCopyBySlot?: Record<string, { id: string; title: string; subtitle: string }>;
     };
-    const sourceMode = body.sourceMode === "manufacturer-promos" ? "manufacturer-promos" : "product-photos";
+    const validUrls = (body.productSkuDataUrls ?? []).filter(Boolean);
+    if (!validUrls.length) return NextResponse.json({ error: "At least one product SKU image is required." }, { status: 400 });
+    if (!Array.isArray(body.manufacturerReferenceGroups)) return NextResponse.json({ error: "Manufacturer reference groups are required." }, { status: 400 });
 
-    const productPhotoDataUrls = body.productPhotoDataUrls && body.productPhotoDataUrls.length > 0
-      ? body.productPhotoDataUrls
-      : body.productPhotoDataUrl
-        ? [body.productPhotoDataUrl]
-        : [];
+    const groups = new Map<string, string[]>();
+    for (const group of body.manufacturerReferenceGroups as Array<{ role?: string; dataUrls?: unknown }>) {
+      if (group?.role) groups.set(group.role, Array.isArray(group.dataUrls) ? group.dataUrls.filter((url): url is string => typeof url === "string" && Boolean(url.trim())) : []);
+    }
+    for (const [role, urls] of groups) {
+      const max = ECOMMERCE_REFERENCE_ROLE_MAX_COUNTS[role as keyof typeof ECOMMERCE_REFERENCE_ROLE_MAX_COUNTS];
+      if (max !== undefined && urls.length > max) return NextResponse.json({ error: `${role} reference group accepts up to ${max} image(s).` }, { status: 400 });
+    }
 
-    const validUrls = productPhotoDataUrls.filter(Boolean);
-    const manufacturerPromoDataUrls = (body.manufacturerPromoDataUrls ?? []).filter(Boolean);
-    const petPhotoDataUrls = body.petPhotoDataUrls && (
-      body.petPhotoDataUrls.front
-      || body.petPhotoDataUrls.side
-      || body.petPhotoDataUrls.back
-    )
-      ? {
-          front: body.petPhotoDataUrls.front ?? null,
-          side: body.petPhotoDataUrls.side ?? null,
-          back: body.petPhotoDataUrls.back ?? null,
-        }
-      : undefined;
-    const petReplacementEnabled = body.petReplacementEnabled === true && Boolean(petPhotoDataUrls);
-    const brandLogoDataUrl = body.brandLogoEnabled === true
-      && typeof body.brandLogoDataUrl === "string"
-      && body.brandLogoDataUrl.trim().length > 0
-      ? body.brandLogoDataUrl
-      : undefined;
-    if (sourceMode === "manufacturer-promos") {
-      if (manufacturerPromoDataUrls.length === 0) {
-        return NextResponse.json({ error: "At least one manufacturerPromoDataUrl is required." }, { status: 400 });
-      }
-      if (manufacturerPromoDataUrls.length > 6) {
-        return NextResponse.json({ error: "Upload up to 6 manufacturer promo images." }, { status: 400 });
-      }
-      if (petReplacementEnabled && (!petPhotoDataUrls?.front || !petPhotoDataUrls.side || !petPhotoDataUrls.back)) {
-        return NextResponse.json(
-          { error: "Pet replacement requires front, side, and back pet photos." },
-          { status: 400 },
-        );
-      }
-    } else if (validUrls.length === 0) {
-      return NextResponse.json({ error: "At least one productPhotoDataUrl is required." }, { status: 400 });
+    const selectedCopyBySlot = body.selectedCopyBySlot ?? {};
+    const referenceCounts = { scene: groups.get("scene")?.length ?? 0, detail: groups.get("detail")?.length ?? 0, variant: 1 } as const;
+    const requiredSlotIds = getEcommerceCarouselSlots(referenceCounts).map((slot) => slot.id);
+    if (requiredSlotIds.some((slotId) => !selectedCopyBySlot[slotId]?.title?.trim() || !selectedCopyBySlot[slotId]?.subtitle?.trim())) {
+      return NextResponse.json({ error: "Select one English title and subtitle proposal for every generated carousel image." }, { status: 400 });
     }
 
     const job = await createEcommerceAssetsJob({
-      sourceMode,
-      productPhotoDataUrls: validUrls,
-      manufacturerPromoDataUrls,
-      petPhotoDataUrls,
-      petReplacementEnabled,
-      brandLogoDataUrl,
-      brandLogoEnabled: body.brandLogoEnabled,
-      brandLogoCorner: body.brandLogoCorner,
-      customRequirements: body.customRequirements,
-      textLanguage: body.textLanguage,
-      imageResolution: body.imageResolution,
-      imageAspectRatio: body.imageAspectRatio,
-      videoAspectRatio: body.videoAspectRatio,
-      videoResolution: body.videoResolution,
-      assetScope: body.assetScope,
-      assetScopes: body.assetScopes,
+      productSkuDataUrls: validUrls,
+      primarySkuIndex: body.primarySkuIndex,
+      manufacturerReferenceGroups: body.manufacturerReferenceGroups,
+      selectedCopyBySlot,
     });
 
     return NextResponse.json({ success: true, jobId: job.id, job }, { status: 202 });

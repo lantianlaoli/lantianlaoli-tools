@@ -121,70 +121,45 @@ export type TikTokPricingAiRecommendation = {
   priceAdjustments: Array<{ country: TikTokPricingCountry; suggestedPrice: number; rationale: string }>;
 };
 
-export type EcommerceAssetKind = "carousel" | "detail" | "videoStoryboard" | "video";
-export type EcommerceAssetScope = "all" | "carousel" | "detail" | "video";
-export type EcommerceAssetScopeOption = Exclude<EcommerceAssetScope, "all">;
-
 export type EcommerceSlotStatus = "waiting" | "processing" | "success" | "fail";
+export type EcommerceCarouselRole = "main" | "scene" | "detail" | "variant";
 
-export type EcommerceProductView = "front" | "side" | "back";
-export type EcommerceSourceMode = "product-photos" | "manufacturer-promos";
-export type EcommerceLogoCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
-
-export type EcommerceProductPhotoSlot = {
-  view: EcommerceProductView;
-  dataUrl: string | null;
-  fileName: string | null;
+export type EcommerceSkuImage = {
+  id: string;
+  dataUrl: string;
+  fileName: string;
+  isPrimary: boolean;
+  sortOrder: number;
 };
 
-export type EcommerceCreativeBrief = {
-  productCategory: string;
-  productIdentity: string;
-  materialsAndColors: string;
-  sellingPoints: string[];
-  designLanguage: string;
-  carouselDirection: string;
-  detailDirection: string;
-  videoDirection: string;
-  customRequirements?: string;
+export type EcommerceManufacturerReferenceGroup = {
+  role: EcommerceCarouselRole;
+  dataUrls: string[];
+};
+
+export type EcommerceCopyProposal = {
+  id: string;
+  title: string;
+  subtitle: string;
+};
+
+export type EcommerceSlotCopyOptions = {
+  slotId: string;
+  role: EcommerceCarouselRole;
+  index: number;
+  title: string;
+  proposals: EcommerceCopyProposal[];
 };
 
 export type EcommerceImageSlot = {
   id: string;
-  kind: Extract<EcommerceAssetKind, "carousel" | "detail">;
+  role: EcommerceCarouselRole;
   index: number;
-  sourceIndex?: number;
   title: string;
   taskId: string;
   status: EcommerceSlotStatus;
-  resultUrl?: string;
-  error?: string;
-  prompt: string;
-};
-
-export type EcommerceManufacturerPromoVisualHierarchy = {
-  primaryText: string;
-  secondaryText: string[];
-  specs: string[];
-  badges: string[];
-  logoText: string[];
-  decorativeText: string[];
-  layout: string;
-};
-
-export type EcommerceManufacturerPromoAnalysis = {
-  productSubject: string;
-  visualHierarchy: EcommerceManufacturerPromoVisualHierarchy;
-  productVisuals: string;
-  keyMessages: string[];
-  rewriteGuidance: string;
-};
-
-export type EcommerceVideoSlot = {
-  taskId?: string;
-  status: EcommerceSlotStatus;
-  storyboardTaskId?: string;
-  storyboardUrl?: string;
+  usePerson: boolean;
+  selectedCopy?: EcommerceCopyProposal;
   resultUrl?: string;
   error?: string;
   prompt: string;
@@ -192,33 +167,19 @@ export type EcommerceVideoSlot = {
 
 export type EcommerceAssetsJob = {
   id: string;
-  sourceMode?: EcommerceSourceMode;
   status: "preparing" | "processing" | "completed" | "failed";
-  assetScope?: EcommerceAssetScope;
-  assetScopes?: EcommerceAssetScopeOption[];
-  textLanguage: EcommerceTextLanguage;
-  imageResolution?: string;
-  imageAspectRatio?: string;
-  videoResolution?: string;
-  videoAspectRatio?: string;
-  productImageUrl?: string;
-  productImageUrls?: string[];
-  manufacturerPromoImageUrls?: string[];
-  manufacturerPromoAnalyses?: EcommerceManufacturerPromoAnalysis[];
-  brief?: EcommerceCreativeBrief;
-  customRequirements?: string;
-  petReplacement?: {
-    enabled: boolean;
-    petImageUrls: string[];
-  };
+  textLanguage: "en";
+  imageResolution: "1K";
+  imageAspectRatio: "1:1";
+  productSkuImageUrls: string[];
+  primarySkuIndex: number;
+  manufacturerReferenceImageUrls: Record<EcommerceCarouselRole, string[]>;
   brandLogo?: {
     enabled: boolean;
-    corner: EcommerceLogoCorner;
     logoImageUrl: string;
   };
+  personImageUrl?: string;
   carouselImages: EcommerceImageSlot[];
-  detailImages: EcommerceImageSlot[];
-  video: EcommerceVideoSlot;
   error?: string;
   createdAt: number;
   updatedAt: number;

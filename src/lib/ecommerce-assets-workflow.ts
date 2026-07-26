@@ -1,494 +1,132 @@
 import {
-  analyzeManufacturerPromoForEcommerceAssets,
-  analyzeProductForEcommerceAssets,
-  buildEcommerceImagePrompts,
-  buildEcommerceStoryboardPrompt,
-  buildEcommerceVideoPrompt,
-  buildManufacturerPromoCarouselPrompt,
-  fallbackEcommerceBrief,
-  fallbackManufacturerPromoAnalysis,
-  getBrandLogoNote,
-  getPetReplacementNote,
+  CHUB_TWO_LOGO_URL,
+  CHUB_TWO_MAIN_COMPOSITION_URL,
+  CHUB_TWO_PERSON_URL,
+  ECOMMERCE_CAROUSEL_ROLES,
+  buildEcommerceCarouselPrompts,
 } from "./ecommerce-assets";
-import {
-  generateEcommerceAssetsJobId,
-} from "./ecommerce-assets-store";
-import { normalizeEcommerceTextLanguage } from "./ecommerce-language";
-import {
-  createKieImageTask,
-  createKieSeedanceVideoTask,
-  getKieImageStatus,
-  uploadKieImage,
-} from "./kie";
+import { generateEcommerceAssetsJobId } from "./ecommerce-assets-store";
+import { createKieImageTask, getKieImageStatus, uploadKieImage } from "./kie";
 import type {
-  EcommerceAssetScope,
-  EcommerceAssetScopeOption,
   EcommerceAssetsJob,
-  EcommerceCreativeBrief,
-  EcommerceImageSlot,
-  EcommerceLogoCorner,
-  EcommerceSourceMode,
+  EcommerceCarouselRole,
+  EcommerceCopyProposal,
+  EcommerceManufacturerReferenceGroup,
   EcommerceSlotStatus,
-  EcommerceTextLanguage,
-  KieAspectRatio,
-  KieResolution,
 } from "./types";
 
 function isTerminal(status: EcommerceSlotStatus) {
   return status === "success" || status === "fail";
 }
 
-async function safeGetKieStatus(taskId: string) {
-  try {
-    return await getKieImageStatus(taskId);
-  } catch {
-    return undefined;
+function normalizeReferenceGroups(value: unknown): Record<EcommerceCarouselRole, string[]> {
+  const groups: Record<EcommerceCarouselRole, string[]> = { main: [], scene: [], detail: [], variant: [] };
+  if (!Array.isArray(value)) return groups;
+  for (const item of value as EcommerceManufacturerReferenceGroup[]) {
+    if (!item || !ECOMMERCE_CAROUSEL_ROLES.includes(item.role)) continue;
+    groups[item.role] = Array.isArray(item.dataUrls)
+      ? item.dataUrls.filter((url): url is string => typeof url === "string" && Boolean(url.trim()))
+      : [];
   }
+  return groups;
 }
 
-export function normalizeEcommerceAssetScope(value: unknown): EcommerceAssetScope {
-  return value === "carousel" || value === "detail" || value === "video" || value === "all" ? value : "all";
-}
-
-const ALL_ASSET_SCOPE_OPTIONS: EcommerceAssetScopeOption[] = ["carousel", "detail", "video"];
-const MANUFACTURER_PROMO_LIMIT = 6;
-const BRAND_LOGO_BUCKET = "lantian-tools/ecommerce-brand-logos";
-
-function normalizeSourceMode(value: unknown): EcommerceSourceMode {
-  return value === "manufacturer-promos" ? "manufacturer-promos" : "product-photos";
-}
-
-function normalizeLogoCorner(value: unknown): EcommerceLogoCorner {
-  return value === "top-left" || value === "top-right" || value === "bottom-left" || value === "bottom-right"
-    ? value
-    : "top-left";
-}
-
-export function normalizeEcommerceAssetScopes(value: unknown, legacyScope?: unknown): EcommerceAssetScopeOption[] {
-  if (Array.isArray(value)) {
-    const scopes = value.filter((scope): scope is EcommerceAssetScopeOption =>
-      scope === "carousel" || scope === "detail" || scope === "video"
-    );
-    const uniqueScopes = ALL_ASSET_SCOPE_OPTIONS.filter((scope) => scopes.includes(scope));
-    if (uniqueScopes.length > 0) return uniqueScopes;
-  }
-
-  const normalizedLegacyScope = normalizeEcommerceAssetScope(legacyScope);
-  return normalizedLegacyScope === "all" ? ALL_ASSET_SCOPE_OPTIONS : [normalizedLegacyScope];
-}
-
-function primaryAssetScope(scopes: EcommerceAssetScopeOption[]): EcommerceAssetScope {
-  return scopes.length === ALL_ASSET_SCOPE_OPTIONS.length ? "all" : scopes[0] ?? "all";
-}
-
-function activeScopes(job: Pick<EcommerceAssetsJob, "assetScope" | "assetScopes">): EcommerceAssetScopeOption[] {
-  return job.assetScopes?.length ? job.assetScopes : normalizeEcommerceAssetScopes(undefined, job.assetScope);
-}
-
-function includesCarousel(scopes: EcommerceAssetScopeOption[]) {
-  return scopes.includes("carousel");
-}
-
-function includesDetail(scopes: EcommerceAssetScopeOption[]) {
-  return scopes.includes("detail");
-}
-
-function includesVideo(scopes: EcommerceAssetScopeOption[]) {
-  return scopes.includes("video");
-}
-
-function overallStatus(job: EcommerceAssetsJob): EcommerceAssetsJob["status"] {
-  const scopes = activeScopes(job);
-  const imageSlots = [
-    ...(includesCarousel(scopes) ? job.carouselImages : []),
-    ...(includesDetail(scopes) ? job.detailImages : []),
-  ];
-  const needsVideo = includesVideo(scopes);
-  const allDone = imageSlots.every((slot) => isTerminal(slot.status)) && (!needsVideo || isTerminal(job.video.status));
-  if (allDone) return imageSlots.some((slot) => slot.status === "fail") || (needsVideo && job.video.status === "fail") ? "failed" : "completed";
-  if (job.error) return "failed";
-  return "processing";
-}
-
-async function createImageSlots(input: {
-  brief: EcommerceCreativeBrief;
-  productImageUrl: string;
-  productImageUrls: string[];
-  textLanguage: EcommerceTextLanguage;
-  imageResolution: KieResolution;
-  imageAspectRatio: KieAspectRatio;
-  assetScopes: EcommerceAssetScopeOption[];
-}) {
-  const promptSlots = buildEcommerceImagePrompts(input.brief, input.textLanguage, input.productImageUrls.length).filter((slot) => {
-    if (slot.kind === "carousel") return includesCarousel(input.assetScopes);
-    return includesDetail(input.assetScopes);
-  });
-  const slots: EcommerceImageSlot[] = [];
-
-  for (const promptSlot of promptSlots) {
-    const taskId = await createKieImageTask({
-      prompt: promptSlot.prompt,
-      inputUrls: input.productImageUrls,
-      aspectRatio: input.imageAspectRatio,
-      resolution: input.imageResolution,
-    });
-    slots.push({
-      id: `${promptSlot.kind}-${promptSlot.index}`,
-      kind: promptSlot.kind,
-      index: promptSlot.index,
-      title: promptSlot.title,
-      taskId,
-      status: "waiting",
-      prompt: promptSlot.prompt,
-    });
-  }
-
-  return {
-    carouselImages: slots.filter((slot) => slot.kind === "carousel"),
-    detailImages: slots.filter((slot) => slot.kind === "detail"),
-  };
-}
-
-async function createManufacturerPromoImageSlots(input: {
-  manufacturerPromoImageUrls: string[];
-  customRequirements?: string;
-  textLanguage: EcommerceTextLanguage;
-  imageResolution: KieResolution;
-  imageAspectRatio: KieAspectRatio;
-  petHostedUrls?: string[];
-  petReplacementNote?: string;
-  brandLogoHostedUrl?: string;
-  brandLogoNote?: string;
-}) {
-  const results = await Promise.all(
-    input.manufacturerPromoImageUrls.map(async (imageUrl, index) => {
-      let analysis;
-      try {
-        analysis = await analyzeManufacturerPromoForEcommerceAssets(imageUrl, input.textLanguage);
-      } catch (error) {
-        console.error(
-          `[ecommerce-assets] Falling back after manufacturer promo analysis failed for image ${index + 1}:`,
-          error instanceof Error ? error.message : error,
-        );
-        analysis = fallbackManufacturerPromoAnalysis(input.textLanguage);
-      }
-      const prompt = buildManufacturerPromoCarouselPrompt({
-        analysis,
-        customRequirements: input.customRequirements,
-        textLanguage: input.textLanguage,
-        sourceIndex: index,
-        petReplacementNote: input.petReplacementNote,
-        brandLogoNote: input.brandLogoNote,
-      });
-      const refUrls: string[] = [];
-      if (input.brandLogoHostedUrl) refUrls.push(input.brandLogoHostedUrl);
-      if (input.petHostedUrls?.length) refUrls.push(...input.petHostedUrls);
-      const inputUrls = refUrls.length ? [imageUrl, ...refUrls] : [imageUrl];
-      const taskId = await createKieImageTask({
-        prompt,
-        inputUrls,
-        aspectRatio: input.imageAspectRatio,
-        resolution: input.imageResolution,
-      });
-      const slot: EcommerceImageSlot = {
-        id: `manufacturer-carousel-${index + 1}`,
-        kind: "carousel",
-        index: index + 1,
-        sourceIndex: index,
-        title: input.textLanguage === "zh" ? `厂家图 ${index + 1}` : `Manufacturer Image ${index + 1}`,
-        taskId,
-        status: "waiting",
-        prompt,
-      };
-      return { slot, analysis };
-    })
-  );
-
-  return {
-    analyses: results.map((entry) => entry.analysis),
-    carouselImages: results.map((entry) => entry.slot),
-  };
+async function uploadGroup(dataUrls: string[], prefix: string, jobId: string) {
+  return Promise.all(dataUrls.map((dataUrl, index) => uploadKieImage(dataUrl, `${prefix}-${index + 1}-${jobId}.jpg`, "lantian-tools/ecommerce-assets")));
 }
 
 export async function createEcommerceAssetsJob(input: {
-  productPhotoDataUrls: string[];
-  sourceMode?: unknown;
-  manufacturerPromoDataUrls?: string[];
-  petPhotoDataUrls?: { front: string | null; side: string | null; back: string | null };
-  petReplacementEnabled?: boolean;
-  brandLogoDataUrl?: string | null;
-  brandLogoEnabled?: boolean;
-  brandLogoCorner?: string;
-  customRequirements?: string;
-  textLanguage?: unknown;
-  imageResolution?: string;
-  imageAspectRatio?: string;
-  videoAspectRatio?: string;
-  videoResolution?: string;
-  assetScope?: unknown;
-  assetScopes?: unknown;
+  productSkuDataUrls: string[];
+  primarySkuIndex?: number;
+  manufacturerReferenceGroups: unknown;
+  selectedCopyBySlot: Record<string, EcommerceCopyProposal>;
 }) {
-  const textLanguage = normalizeEcommerceTextLanguage(input.textLanguage);
-  const sourceMode = normalizeSourceMode(input.sourceMode);
-  const assetScopes = sourceMode === "manufacturer-promos"
-    ? (["carousel"] as EcommerceAssetScopeOption[])
-    : normalizeEcommerceAssetScopes(input.assetScopes, input.assetScope);
-  const assetScope = primaryAssetScope(assetScopes);
-  const imageResolution: KieResolution = ["1K", "2K", "4K"].includes(input.imageResolution ?? "")
-    ? (input.imageResolution as KieResolution)
-    : "1K";
-  const imageAspectRatio: KieAspectRatio = ["1:1", "4:3", "3:4", "16:9", "9:16"].includes(input.imageAspectRatio ?? "")
-    ? (input.imageAspectRatio as KieAspectRatio)
-    : "1:1";
-  const videoAspectRatio: KieAspectRatio = ["1:1", "4:3", "3:4", "16:9", "9:16"].includes(input.videoAspectRatio ?? "")
-    ? (input.videoAspectRatio as KieAspectRatio)
-    : "1:1";
-  const videoResolution: "480p" | "720p" = input.videoResolution === "720p" ? "720p" : "480p";
   const jobId = generateEcommerceAssetsJobId();
+  const productDataUrls = input.productSkuDataUrls.filter(Boolean);
+  const primarySkuIndex = Math.min(Math.max(input.primarySkuIndex ?? 0, 0), productDataUrls.length - 1);
+  const referenceGroups = normalizeReferenceGroups(input.manufacturerReferenceGroups);
   const now = Date.now();
-  let job: EcommerceAssetsJob = {
-    id: jobId,
-    sourceMode,
-    status: "preparing",
-    assetScope,
-    assetScopes,
-    textLanguage,
-    customRequirements: input.customRequirements,
-    imageAspectRatio,
-    videoAspectRatio,
-    carouselImages: [],
-    detailImages: [],
-    video: {
-      status: "waiting",
-      prompt: "",
+
+  const uploadedSkuUrls = await Promise.all(productDataUrls.map((dataUrl, index) =>
+    uploadKieImage(dataUrl, `chub-two-sku-${index + 1}-${jobId}.jpg`, "lantian-tools/ecommerce-assets")
+  ));
+  const productSkuImageUrls = [uploadedSkuUrls[primarySkuIndex], ...uploadedSkuUrls.filter((_, index) => index !== primarySkuIndex)];
+  const manufacturerReferenceImageUrls = {
+    main: await uploadGroup(referenceGroups.main, "chub-two-main-reference", jobId),
+    scene: await uploadGroup(referenceGroups.scene, "chub-two-scene-reference", jobId),
+    detail: await uploadGroup(referenceGroups.detail, "chub-two-detail-reference", jobId),
+    variant: await uploadGroup(referenceGroups.variant, "chub-two-variant-reference", jobId),
+  } satisfies Record<EcommerceCarouselRole, string[]>;
+  const personImageUrl = CHUB_TWO_PERSON_URL;
+  const selectedCopyBySlot = input.selectedCopyBySlot;
+  const prompts = buildEcommerceCarouselPrompts({
+    skuImageCount: productSkuImageUrls.length,
+    primarySkuIndex: 0,
+    selectedCopyBySlot,
+    manufacturerReferenceCountByRole: {
+      scene: manufacturerReferenceImageUrls.scene.length,
+      detail: manufacturerReferenceImageUrls.detail.length,
+      variant: manufacturerReferenceImageUrls.variant.length,
     },
+  });
+
+  const slots = await Promise.all(prompts.map(async (promptSlot) => {
+    const roleReferences = manufacturerReferenceImageUrls[promptSlot.role];
+    const inputUrls = [
+      ...(promptSlot.role === "main" ? productSkuImageUrls.slice(0, 1) : promptSlot.role === "variant" ? productSkuImageUrls : []),
+      ...roleReferences,
+      ...(promptSlot.role === "main" ? [CHUB_TWO_MAIN_COMPOSITION_URL] : []),
+      ...(promptSlot.role === "main" ? [] : [CHUB_TWO_LOGO_URL]),
+      ...(promptSlot.usePerson ? [personImageUrl] : []),
+    ];
+    const taskId = await createKieImageTask({ prompt: promptSlot.prompt, inputUrls, aspectRatio: "1:1", resolution: "1K" });
+    return { ...promptSlot, taskId, status: "waiting" as const };
+  }));
+
+  const job: EcommerceAssetsJob = {
+    id: jobId,
+    status: "processing",
+    textLanguage: "en",
+    imageResolution: "1K",
+    imageAspectRatio: "1:1",
+    productSkuImageUrls,
+    primarySkuIndex: 0,
+    manufacturerReferenceImageUrls,
+    brandLogo: { enabled: true, logoImageUrl: CHUB_TWO_LOGO_URL },
+    personImageUrl,
+    carouselImages: slots,
     createdAt: now,
-    updatedAt: now,
+    updatedAt: Date.now(),
   };
-
-  try {
-    if (sourceMode === "manufacturer-promos") {
-      const promoDataUrls = (input.manufacturerPromoDataUrls ?? []).filter(Boolean);
-      if (promoDataUrls.length === 0) {
-        throw new Error("At least one manufacturerPromoDataUrl is required.");
-      }
-      if (promoDataUrls.length > MANUFACTURER_PROMO_LIMIT) {
-        throw new Error(`Upload up to ${MANUFACTURER_PROMO_LIMIT} manufacturer promo images.`);
-      }
-
-      const manufacturerPromoImageUrls = await Promise.all(
-        promoDataUrls.map((dataUrl, i) =>
-          uploadKieImage(dataUrl, `manufacturer-promo-${i + 1}-${jobId}.jpg`, "lantian-tools/ecommerce-manufacturer-promos")
-        )
-      );
-
-      const petViews = input.petPhotoDataUrls;
-      const wantsPetReplacement = Boolean(input.petReplacementEnabled)
-        && Boolean(petViews?.front) && Boolean(petViews?.side) && Boolean(petViews?.back);
-      const petImageUrls: string[] = [];
-      if (wantsPetReplacement && petViews) {
-        const orderedViews: Array<"front" | "side" | "back"> = ["front", "side", "back"];
-        const petDataUrls = orderedViews.map((view) => petViews[view]!);
-        const hosted = await Promise.all(
-          petDataUrls.map((dataUrl, i) =>
-            uploadKieImage(dataUrl, `pet-${orderedViews[i]}-${jobId}.jpg`, "lantian-tools/ecommerce-pets")
-          )
-        );
-        petImageUrls.push(...hosted);
-      }
-      const petReplacementNote = petImageUrls.length === 3
-        ? getPetReplacementNote(textLanguage)
-        : undefined;
-
-      const wantsBrandLogo = sourceMode === "manufacturer-promos"
-        && input.brandLogoEnabled === true
-        && Boolean(input.brandLogoDataUrl && input.brandLogoDataUrl.trim());
-      const brandLogoCorner = normalizeLogoCorner(input.brandLogoCorner);
-      let brandLogoImageUrl: string | undefined;
-      if (wantsBrandLogo && input.brandLogoDataUrl) {
-        try {
-          brandLogoImageUrl = await uploadKieImage(
-            input.brandLogoDataUrl,
-            `brand-logo-${jobId}.png`,
-            BRAND_LOGO_BUCKET,
-          );
-        } catch (error) {
-          console.error(
-            "[ecommerce-assets] Brand logo upload failed; continuing without logo:",
-            error instanceof Error ? error.message : error,
-          );
-          brandLogoImageUrl = undefined;
-        }
-      }
-      const brandLogoNote = brandLogoImageUrl
-        ? getBrandLogoNote(textLanguage, brandLogoCorner)
-        : undefined;
-
-      const manufacturerSlots = await createManufacturerPromoImageSlots({
-        manufacturerPromoImageUrls,
-        customRequirements: input.customRequirements,
-        textLanguage,
-        imageResolution,
-        imageAspectRatio,
-        petHostedUrls: petImageUrls.length === 3 ? petImageUrls : undefined,
-        petReplacementNote,
-        brandLogoHostedUrl: brandLogoImageUrl,
-        brandLogoNote,
-      });
-
-      return {
-        ...job,
-        status: "processing",
-        imageResolution,
-        manufacturerPromoImageUrls,
-        manufacturerPromoAnalyses: manufacturerSlots.analyses,
-        petReplacement: petImageUrls.length === 3
-          ? { enabled: true, petImageUrls }
-          : undefined,
-        brandLogo: brandLogoImageUrl
-          ? { enabled: true, corner: brandLogoCorner, logoImageUrl: brandLogoImageUrl }
-          : undefined,
-        carouselImages: manufacturerSlots.carouselImages,
-        detailImages: [],
-        video: { status: "waiting", prompt: "" },
-        updatedAt: Date.now(),
-      };
-    }
-
-    const viewLabels = ["front", "side", "back"];
-    const uploadResults = await Promise.all(
-      input.productPhotoDataUrls.map((dataUrl, i) =>
-        uploadKieImage(dataUrl, `ecommerce-product-${viewLabels[i] ?? i}-${jobId}.jpg`, "lantian-tools/ecommerce-assets")
-      )
-    );
-    const productImageUrls = uploadResults;
-    const productImageUrl = productImageUrls[0];
-    let brief: EcommerceCreativeBrief;
-    try {
-      brief = await analyzeProductForEcommerceAssets(productImageUrls, textLanguage, input.customRequirements);
-    } catch (error) {
-      console.error("[ecommerce-assets] Falling back after product analysis failed:", error instanceof Error ? error.message : error);
-      brief = fallbackEcommerceBrief(textLanguage);
-    }
-
-    const imageSlots = await createImageSlots({ brief, productImageUrl, productImageUrls, textLanguage, imageResolution, imageAspectRatio, assetScopes });
-    const storyboardPrompt = includesVideo(assetScopes) ? buildEcommerceStoryboardPrompt(brief, textLanguage, productImageUrls.length) : "";
-    const storyboardTaskId = storyboardPrompt
-      ? await createKieImageTask({
-          prompt: storyboardPrompt,
-          inputUrls: productImageUrls,
-          aspectRatio: videoAspectRatio,
-          resolution: imageResolution,
-        })
-      : undefined;
-
-    job = {
-      ...job,
-      status: "processing",
-      imageResolution,
-      videoResolution,
-      productImageUrl,
-      productImageUrls,
-      brief,
-      ...imageSlots,
-      video: {
-        storyboardTaskId,
-        status: "waiting",
-        prompt: includesVideo(assetScopes) ? buildEcommerceVideoPrompt(brief, textLanguage, productImageUrls.length) : "",
-      },
-      updatedAt: Date.now(),
-    };
-    return job;
-  } catch (error) {
-    throw error;
-  }
+  return job;
 }
 
-async function refreshImageSlot(slot: EcommerceImageSlot): Promise<EcommerceImageSlot> {
-  if (isTerminal(slot.status) || !slot.taskId) return slot;
-  let status: Awaited<ReturnType<typeof getKieImageStatus>> | undefined;
+async function refreshSlot(slot: EcommerceAssetsJob["carouselImages"][number]) {
+  if (isTerminal(slot.status)) return slot;
   try {
-    status = await getKieImageStatus(slot.taskId);
+    const status = await getKieImageStatus(slot.taskId);
+    if (status.status === "success") return { ...slot, status: "success" as const, resultUrl: status.resultUrl };
+    if (status.status === "fail") return { ...slot, status: "fail" as const, error: status.error || "Image generation failed." };
+    return { ...slot, status: status.status };
   } catch {
     return slot;
   }
-  if (status.status === "success") {
-    return { ...slot, status: "success", resultUrl: status.resultUrl };
-  }
-  if (status.status === "fail") {
-    return { ...slot, status: "fail", error: status.error || "Image generation failed." };
-  }
-  return { ...slot, status: status.status };
 }
 
 export async function refreshEcommerceAssetsJob(currentJob: EcommerceAssetsJob): Promise<EcommerceAssetsJob> {
-  const carouselImages = await Promise.all(currentJob.carouselImages.map(refreshImageSlot));
-  const detailImages = await Promise.all(currentJob.detailImages.map(refreshImageSlot));
-  let video = { ...currentJob.video };
-  const needsVideo = includesVideo(activeScopes(currentJob));
-
-  if (needsVideo && video.storyboardTaskId && !video.storyboardUrl && video.status !== "fail") {
-    const storyboardStatus = await safeGetKieStatus(video.storyboardTaskId);
-    if (storyboardStatus?.status === "success" && storyboardStatus.resultUrl) {
-      video = { ...video, storyboardUrl: storyboardStatus.resultUrl, status: "processing" };
-    } else if (storyboardStatus?.status === "fail") {
-      video = { ...video, status: "fail", error: storyboardStatus.error || "Storyboard generation failed." };
-    } else if (storyboardStatus) {
-      video = { ...video, status: storyboardStatus.status };
-    }
-  }
-
-  if (
-    needsVideo &&
-    video.storyboardUrl &&
-    !video.taskId &&
-    video.status !== "fail" &&
-    currentJob.productImageUrl
-  ) {
-    const productRefs = currentJob.productImageUrls && currentJob.productImageUrls.length > 0
-      ? currentJob.productImageUrls
-      : [currentJob.productImageUrl];
-    const videoRes: "480p" | "720p" = currentJob.videoResolution === "720p" ? "720p" : "480p";
-    const videoAspect = (["1:1", "16:9", "9:16"].includes(currentJob.videoAspectRatio ?? "")
-      ? currentJob.videoAspectRatio!
-      : "1:1") as "1:1" | "16:9" | "9:16";
-    const taskId = await createKieSeedanceVideoTask({
-      prompt: video.prompt,
-      referenceImageUrls: [...productRefs, video.storyboardUrl],
-      aspectRatio: videoAspect,
-      resolution: videoRes,
-      duration: 15,
-    });
-    video = { ...video, taskId, status: "processing" };
-  } else if (video.taskId && !isTerminal(video.status)) {
-    const videoStatus = await safeGetKieStatus(video.taskId);
-    if (!videoStatus) {
-      const updated = {
-        ...currentJob,
-        carouselImages,
-        detailImages,
-        video,
-        updatedAt: Date.now(),
-      };
-      return { ...updated, status: overallStatus(updated) };
-    }
-    if (videoStatus.status === "success" && videoStatus.resultUrl) {
-      video = { ...video, status: "success", resultUrl: videoStatus.resultUrl };
-    } else if (videoStatus.status === "fail") {
-      video = { ...video, status: "fail", error: videoStatus.error || "Video generation failed." };
-    } else {
-      video = { ...video, status: videoStatus.status };
-    }
-  }
-
-  const updated = {
-    ...currentJob,
-    carouselImages,
-    detailImages,
-    video,
-    updatedAt: Date.now(),
-  };
-  return { ...updated, status: overallStatus(updated) };
+  const carouselImages = await Promise.all(currentJob.carouselImages.map(refreshSlot));
+  const status = carouselImages.every((slot) => isTerminal(slot.status))
+    ? carouselImages.some((slot) => slot.status === "fail") ? "failed" : "completed"
+    : "processing";
+  return { ...currentJob, carouselImages, status, updatedAt: Date.now() };
 }
 
-export { normalizeEcommerceTextLanguage };
+export function getSlotReferenceUrls(job: EcommerceAssetsJob, slot: EcommerceAssetsJob["carouselImages"][number]) {
+  return [
+    ...(slot.role === "main" ? job.productSkuImageUrls.slice(0, 1) : slot.role === "variant" ? job.productSkuImageUrls : []),
+    ...(job.manufacturerReferenceImageUrls[slot.role] ?? []),
+    ...(slot.role === "main" ? [CHUB_TWO_MAIN_COMPOSITION_URL] : []),
+    ...(slot.role === "main" ? [] : job.brandLogo?.enabled ? [job.brandLogo.logoImageUrl] : []),
+    ...(slot.usePerson && job.personImageUrl ? [job.personImageUrl] : []),
+  ];
+}

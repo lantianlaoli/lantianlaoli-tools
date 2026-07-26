@@ -1,75 +1,62 @@
 import { NextResponse } from "next/server";
-import { createKieImageTask, uploadKieImage } from "@/lib/kie";
+import { buildEcommerceCarouselPrompts } from "@/lib/ecommerce-assets";
+import { createKieImageTask } from "@/lib/kie";
+import { getSlotReferenceUrls } from "@/lib/ecommerce-assets-workflow";
+import type { EcommerceAssetsJob } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const MAX_LOCAL_IMAGES = 4;
-const MAX_LOCAL_IMAGE_BYTES = 10 * 1024 * 1024;
-const LOCAL_IMAGE_DATA_URL_PATTERN = /^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/=]+)$/;
-
-function decodedBase64ByteLength(value: string) {
-  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
-  return Math.floor((value.length * 3) / 4) - padding;
-}
-
-async function uploadLocalImages(
-  localImages: Array<{ fileName?: string; dataUrl?: string }> | undefined
-) {
-  if (!localImages?.length) return [];
-  if (localImages.length > MAX_LOCAL_IMAGES) {
-    throw new Error(`Upload up to ${MAX_LOCAL_IMAGES} reference images.`);
-  }
-  return Promise.all(
-    localImages.map(async (image, index) => {
-      const dataUrl = image.dataUrl?.trim() ?? "";
-      const match = dataUrl.match(LOCAL_IMAGE_DATA_URL_PATTERN);
-      if (!match) throw new Error("Reference images must be PNG, JPG, or WEBP data URLs.");
-      if (decodedBase64ByteLength(match[2]) > MAX_LOCAL_IMAGE_BYTES) {
-        throw new Error("Each reference image must be 10MB or smaller.");
-      }
-      return uploadKieImage(dataUrl, image.fileName ?? `ref-${index}.png`, "lantian-tools/ecommerce-edit");
-    })
-  );
-}
-
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
-      prompt?: string;
-      resultUrl?: string;
+      job?: EcommerceAssetsJob;
+      slotId?: string;
+      skuIndex?: number;
+      title?: string;
+      subtitle?: string;
       refinement?: string;
-      localImages?: Array<{ fileName?: string; dataUrl?: string }>;
     };
-
-    const { prompt, resultUrl, refinement } = body;
-    // TODO(v2): thread pet replacement context (job.petReplacement.petImageUrls) and brand logo (job.brandLogo.logoImageUrl) into the regenerate call for manufacturer-promo slots.
-    if (!prompt) return NextResponse.json({ error: "Original prompt is required." }, { status: 400 });
-    if (!resultUrl) return NextResponse.json({ error: "Current result URL is required." }, { status: 400 });
-    if (!refinement?.trim()) return NextResponse.json({ error: "Refinement text is required." }, { status: 400 });
-
-    const localImageUrls = await uploadLocalImages(body.localImages);
-
-    const combinedPrompt = [
-      prompt,
-      "",
-      "Refinement request:",
-      refinement.trim(),
-      "",
-      "Use the provided current generated image as the primary visual base. Preserve the product identity and update only what is needed to satisfy the refinement request.",
-      localImageUrls.length
-        ? "Use the uploaded reference image(s) as additional visual guidance for the requested changes."
-        : "",
-    ].join("\n");
-
+    const job = body.job;
+    const slotId = body.slotId?.trim();
+    const title = body.title?.trim();
+    const subtitle = body.subtitle?.trim();
+    const refinement = body.refinement?.trim() ?? "";
+    if (!job || !slotId || !title || !subtitle) return NextResponse.json({ error: "job, slotId, title, and subtitle are required." }, { status: 400 });
+    const slot = job.carouselImages.find((candidate) => candidate.id === slotId);
+    if (!slot) return NextResponse.json({ error: "Image slot was not found." }, { status: 404 });
+    const skuIndex = Math.min(Math.max(body.skuIndex ?? 0, 0), job.productSkuImageUrls.length - 1);
+    const referenceCounts = {
+      scene: job.manufacturerReferenceImageUrls.scene?.length ?? 0,
+      detail: job.manufacturerReferenceImageUrls.detail?.length ?? 0,
+      variant: 1,
+    } as const;
+    const prompts = buildEcommerceCarouselPrompts({
+      skuImageCount: job.productSkuImageUrls.length,
+      primarySkuIndex: skuIndex,
+      selectedCopyBySlot: { [slot.id]: { id: `${slot.id}-regenerated`, title, subtitle } },
+      manufacturerReferenceCountByRole: referenceCounts,
+    });
+    const promptSlot = prompts.find((candidate) => candidate.id === slot.id);
+    if (!promptSlot) return NextResponse.json({ error: "Image slot configuration was not found." }, { status: 400 });
+    const inputUrls = slot.role === "main"
+      ? [job.productSkuImageUrls[skuIndex], ...getSlotReferenceUrls(job, { ...slot, usePerson: true }).filter((url) => !job.productSkuImageUrls.includes(url))]
+      : [job.productSkuImageUrls[skuIndex], ...(job.manufacturerReferenceImageUrls[slot.role] ?? []), ...(job.brandLogo?.enabled ? [job.brandLogo.logoImageUrl] : [])];
+    const refinementInstruction = refinement
+      ? [
+        "User's correction request for this regeneration:",
+        refinement,
+        "Follow this correction request precisely. Fix only the requested problems while preserving the selected product identity, fixed CHUB TWO direction, and the image role.",
+      ].join("\n")
+      : "";
     const taskId = await createKieImageTask({
-      prompt: combinedPrompt,
-      inputUrls: [resultUrl, ...localImageUrls],
+      prompt: [promptSlot.prompt, refinementInstruction].filter(Boolean).join("\n\n"),
+      inputUrls: [slot.resultUrl, ...inputUrls].filter((url): url is string => Boolean(url)),
       aspectRatio: "1:1",
       resolution: "1K",
     });
 
-    return NextResponse.json({ taskId });
+    return NextResponse.json({ taskId, prompt: [promptSlot.prompt, refinementInstruction].filter(Boolean).join("\n\n"), selectedCopy: { id: `${slot.id}-regenerated`, title, subtitle }, skuIndex });
   } catch (error) {
     console.error("[ecommerce-assets/regenerate]", error);
     return NextResponse.json(

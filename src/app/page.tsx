@@ -22,10 +22,10 @@ const features = {
     },
     {
       href: "/ecommerce-assets",
-      title: "电商图片 + 视频素材一键生成",
-      description: "上传产品照片，自动生成轮播图、详情图和 1 条广告短片。",
+      title: "TikTok Shop 九张轮播图",
+      description: "上传 CHUB TWO 多 SKU 和 1688 厂家参考图，先选择英文文案方案，再生成 9 张品牌轮播图。",
       icon: Sparkles,
-      meta: "Image2 · Seedance 2 Fast · 多比例",
+      meta: "CHUB TWO · AI 文案方案 · 9 张轮播图",
       action: "打开工作台",
     },
     {
@@ -96,10 +96,10 @@ const features = {
     },
     {
       href: "/ecommerce-assets",
-      title: "Ecommerce Images + Video",
-      description: "Upload product photos, then generate carousel images, detail images, and an ad video in one flow.",
+      title: "TikTok Shop 9-image carousel",
+      description: "Upload CHUB TWO SKU images and 1688 references, choose English copy proposals, and generate nine branded carousel images.",
       icon: Sparkles,
-      meta: "Image2 · Seedance 2 Fast · Multi-ratio",
+      meta: "CHUB TWO · AI copy proposals · 9 images",
       action: "Open workspace",
     },
     {
