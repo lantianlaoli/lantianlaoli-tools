@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   buildEcommerceCarouselPrompts,
   buildEcommerceCopyAnalysisPrompt,
+  CHUB_TWO_DEFAULT_STYLE_GUIDE,
   CHUB_TWO_MAIN_COMPOSITION_URL,
   CHUB_TWO_PERSON_URL,
   fallbackEcommerceCopyOptions,
@@ -33,6 +34,8 @@ test("copy analysis prompt requires three English proposals per slot", () => {
   assert.match(prompt, /visible source copy/);
   assert.match(prompt, /manufacturer source copy/);
   assert.match(prompt, /rewrite its real selling points/);
+  assert.match(prompt, /editable style guide/);
+  assert.match(prompt, new RegExp(CHUB_TWO_DEFAULT_STYLE_GUIDE.slice(0, 30).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
 test("copy normalization fills every generated slot with safe fallback proposals", () => {

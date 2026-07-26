@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowDown, ArrowUp, Check, Download, Loader2, Plus, RefreshCw, Sparkles, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { EcommerceAssetsJob, EcommerceCarouselRole, EcommerceCopyProposal, EcommerceImageSlot, EcommerceSlotCopyOptions } from "@/lib/types";
-import { CHUB_TWO_LOGO_URL, CHUB_TWO_PERSON_URL, ECOMMERCE_CAROUSEL_ROLE_COUNTS } from "@/lib/ecommerce-assets";
+import { CHUB_TWO_DEFAULT_STYLE_GUIDE, CHUB_TWO_LOGO_URL, CHUB_TWO_PERSON_URL, ECOMMERCE_CAROUSEL_ROLE_COUNTS } from "@/lib/ecommerce-assets";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -27,6 +27,8 @@ const copy = {
   copyHint: "每个实际生成的轮播图提供 3 个方案，请逐张选择。",
   brand: "固定品牌配置",
   brandHint: "CHUB TWO · Apple-like · white background / black type · English · 1:1 · 1K · futuristic for young consumers",
+  style: "风格限定",
+  styleHint: "默认使用 CHUB TWO 固定视觉规范。你可以在生成文案前编辑它，修改会作用于本次任务的所有图片。",
   analyze: "生成文案方案",
   analyzing: "AI 正在解析原图…",
   generate: "确认文案并生成图片",
@@ -70,6 +72,7 @@ export default function EcommerceAssetsPage() {
   const [status, setStatus] = useState<PageStatus>("idle");
   const [error, setError] = useState("");
   const [skus, setSkus] = useState<UploadItem[]>([]);
+  const [styleGuide, setStyleGuide] = useState(CHUB_TWO_DEFAULT_STYLE_GUIDE);
   const [refs, setRefs] = useState<Record<EcommerceCarouselRole, UploadItem[]>>({ main: [], scene: [], detail: [], variant: [] });
   const [copyOptions, setCopyOptions] = useState<EcommerceSlotCopyOptions[]>([]);
   const [selectedCopy, setSelectedCopy] = useState<Record<string, EcommerceCopyProposal>>({});
@@ -104,7 +107,7 @@ export default function EcommerceAssetsPage() {
     if (!skus.length) return setError(copy.needSku);
     setStatus("analyzing"); setError("");
     try {
-      const response = await fetch("/api/ecommerce-assets/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productSkuDataUrls: skus.map((item) => item.dataUrl), manufacturerReferenceGroups: roles.map((role) => ({ role, dataUrls: refs[role].map((item) => item.dataUrl) })) }) });
+      const response = await fetch("/api/ecommerce-assets/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productSkuDataUrls: skus.map((item) => item.dataUrl), manufacturerReferenceGroups: roles.map((role) => ({ role, dataUrls: refs[role].map((item) => item.dataUrl) })), styleGuide }) });
       const result = await response.json(); if (!response.ok) throw new Error(result.error);
       setCopyOptions(result.slots); setSelectedCopy({}); setStatus("choosing");
     } catch (e) { setError(e instanceof Error ? e.message : copy.failed); setStatus("error"); }
@@ -115,7 +118,7 @@ export default function EcommerceAssetsPage() {
     if (!skus.length) return setError(copy.needSku); if (!selectedAll) return setError(copy.needCopy);
     setStatus("starting"); setError("");
     try {
-      const response = await fetch("/api/ecommerce-assets/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productSkuDataUrls: skus.map((item) => item.dataUrl), primarySkuIndex: 0, manufacturerReferenceGroups: roles.map((role) => ({ role, dataUrls: refs[role].map((item) => item.dataUrl) })), selectedCopyBySlot: selectedCopy }) });
+      const response = await fetch("/api/ecommerce-assets/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productSkuDataUrls: skus.map((item) => item.dataUrl), primarySkuIndex: 0, manufacturerReferenceGroups: roles.map((role) => ({ role, dataUrls: refs[role].map((item) => item.dataUrl) })), selectedCopyBySlot: selectedCopy, styleGuide }) });
       const result = await response.json(); if (!response.ok) throw new Error(result.error); setJob(result.job); setStatus("polling"); void poll(result.job);
     } catch (e) { setError(e instanceof Error ? e.message : copy.failed); setStatus("error"); }
   }
@@ -137,6 +140,7 @@ export default function EcommerceAssetsPage() {
     <Panel title={copy.sku} subtitle={copy.skuHint}><label className="mb-4 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-lime-300/30 bg-lime-300/5 px-4 py-4 text-sm font-semibold text-lime-200 hover:bg-lime-300/10"><Plus size={17} /> 上传多个 SKU 图片<input type="file" accept="image/png,image/jpeg,image/webp" multiple className="sr-only" disabled={busy} onChange={(event) => { if (event.target.files) void addSkuFiles(event.target.files); event.currentTarget.value = ""; }} /></label><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{skus.map((item, index) => <div key={item.id} className={`relative rounded-lg border p-2 ${index === 0 ? "border-lime-300/60 bg-lime-300/10" : "border-white/10 bg-black/20"}`}><img src={item.dataUrl} alt={item.fileName} className="aspect-square w-full rounded-md object-contain" /><div className="mt-2 truncate text-xs text-zinc-300">{item.fileName}</div><div className="mt-2 flex items-center justify-between gap-1 text-[11px] text-zinc-500"><span>{index === 0 ? <span className="text-lime-200">{copy.primary}</span> : <button type="button" onClick={() => setPrimary(index)} className="text-zinc-300 hover:text-lime-200">{copy.setPrimary}</button>}</span><span className="flex gap-1"><button type="button" disabled={index === 0} onClick={() => moveSku(index, -1)} className="rounded border border-white/10 p-1 disabled:opacity-30"><ArrowUp size={12} /></button><button type="button" disabled={index === skus.length - 1} onClick={() => moveSku(index, 1)} className="rounded border border-white/10 p-1 disabled:opacity-30"><ArrowDown size={12} /></button><button type="button" onClick={() => removeSku(item.id)} className="rounded border border-white/10 p-1 text-red-300/70"><X size={12} /></button></span></div></div>)}</div></Panel>
     <Panel title={copy.refs} subtitle={copy.refsHint}><div className="space-y-5">{roles.map((role) => <div key={role}><div className="mb-2 flex items-center justify-between"><div><h3 className="text-sm font-semibold text-zinc-200">{roleLabel(role)}</h3><p className="text-xs text-zinc-500">{refs[role].length}/{ECOMMERCE_CAROUSEL_ROLE_COUNTS[role]}</p></div><label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-emerald-300/15 px-3 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-300/10"><Plus size={14} /> {copy.upload}<input type="file" accept="image/png,image/jpeg,image/webp" multiple className="sr-only" disabled={busy || refs[role].length >= ECOMMERCE_CAROUSEL_ROLE_COUNTS[role]} onChange={(event) => { for (const file of Array.from(event.target.files ?? []).slice(0, ECOMMERCE_CAROUSEL_ROLE_COUNTS[role] - refs[role].length)) void addRef(role, file); event.currentTarget.value = ""; }} /></label></div><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{refs[role].map((item) => <UploadTile key={item.id} item={item} label={roleLabel(role)} disabled={busy} onUpload={(file) => void addRef(role, file)} onRemove={() => setRefs((current) => ({ ...current, [role]: current[role].filter((candidate) => candidate.id !== item.id) }))} />)}{Array.from({ length: ECOMMERCE_CAROUSEL_ROLE_COUNTS[role] - refs[role].length }, (_, index) => <UploadTile key={`${role}-${index}`} label={`${copy.upload} ${refs[role].length + index + 1}`} disabled={busy} onUpload={(file) => void addRef(role, file)} />)}</div></div>)}</div></Panel>
     <Panel title={copy.person} subtitle={copy.personHint}><div className="flex max-w-md items-center gap-4 rounded-lg border border-white/10 bg-black/20 p-3"><img src={CHUB_TWO_PERSON_URL} alt="CHUB TWO fixed person reference" className="h-28 w-28 rounded-md object-cover" /><div className="text-xs leading-5 text-zinc-400">固定使用该人物参考图，不需要重复上传。仅用于第一张主图。</div></div></Panel>
+    <Panel title={copy.style} subtitle={copy.styleHint}><textarea value={styleGuide} onChange={(event) => setStyleGuide(event.target.value)} rows={7} disabled={busy} className="w-full resize-y rounded-lg border border-white/10 bg-black/20 px-3 py-3 text-sm leading-6 text-zinc-200 outline-none focus:border-lime-300/60 disabled:opacity-60" /></Panel>
     <Panel title={copy.brand} subtitle={copy.brandHint}><div className="flex items-center gap-4 rounded-lg border border-white/10 bg-black/20 p-3"><img src={CHUB_TWO_LOGO_URL} alt="CHUB TWO logo" className="h-12 w-12 object-contain" /><div className="text-xs leading-5 text-zinc-400">Logo 固定使用左上角；第一张纯白底主图不添加 logo。</div></div></Panel>
     <button type="button" onClick={() => void analyze()} disabled={busy} className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-lime-300 text-sm font-semibold text-zinc-950 hover:bg-lime-200 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400">{status === "analyzing" ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />} {status === "analyzing" ? copy.analyzing : copy.analyze}</button>
     {copyOptions.length ? <Panel title={copy.copy} subtitle={copy.copyHint}><div className="space-y-5">{copyOptions.map((slot) => <div key={slot.slotId} className="rounded-lg border border-white/10 bg-black/20 p-4"><div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-zinc-100">{slot.title}</h3>{selectedCopy[slot.slotId] ? <span className="text-xs text-lime-200">已选择</span> : <span className="text-xs text-zinc-500">请选择</span>}</div><div className="grid gap-3 md:grid-cols-3">{slot.proposals.map((proposal) => <button type="button" key={proposal.id} onClick={() => setSelectedCopy((current) => ({ ...current, [slot.slotId]: proposal }))} className={`rounded-lg border p-3 text-left ${selectedCopy[slot.slotId]?.id === proposal.id ? "border-lime-300/70 bg-lime-300/10" : "border-white/10 hover:border-lime-300/30"}`}><div className="flex items-start justify-between gap-2 text-sm font-semibold text-white"><span>{proposal.title}</span>{selectedCopy[slot.slotId]?.id === proposal.id ? <Check size={15} className="shrink-0 text-lime-200" /> : null}</div><p className="mt-2 text-xs leading-5 text-zinc-400">{proposal.subtitle}</p></button>)}</div></div>)}</div></Panel> : null}

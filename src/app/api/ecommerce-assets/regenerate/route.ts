@@ -36,6 +36,7 @@ export async function POST(request: Request) {
       primarySkuIndex: skuIndex,
       selectedCopyBySlot: { [slot.id]: { id: `${slot.id}-regenerated`, title, subtitle } },
       manufacturerReferenceCountByRole: referenceCounts,
+      styleGuide: job.styleGuide,
     });
     const promptSlot = prompts.find((candidate) => candidate.id === slot.id);
     if (!promptSlot) return NextResponse.json({ error: "Image slot configuration was not found." }, { status: 400 });

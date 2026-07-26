@@ -9,6 +9,7 @@ import type {
 export const CHUB_TWO_LOGO_URL = "https://i.postimg.cc/fLDVv53S/8bc7417a-5846-424c-8b81-401a42d87339.png";
 export const CHUB_TWO_PERSON_URL = "https://i.postimg.cc/gknHRkbY/Screen-Shot-2026-06-16-152220-854.png";
 export const CHUB_TWO_MAIN_COMPOSITION_URL = "https://i.postimg.cc/GtqBSY09/7604c462-8537-4270-ae35-0646cce18859.png";
+export const CHUB_TWO_DEFAULT_STYLE_GUIDE = "CHUB TWO brand direction. Apple-like restraint with a futuristic, youthful feel for young consumers. Use a white background, black typography, English only, 1:1 square composition, 1K quality, and fill the frame with the product or relevant scene without obvious empty space. Keep the visual system extremely minimalist: one clear product focus, one short headline, one short subtitle, and only the fixed CHUB TWO logo where applicable. Avoid decorative clutter, mini-cards, icon grids, specification walls, extra products, unrelated props, pets, prices, QR codes, and copied manufacturer logos or watermarks.";
 export const ECOMMERCE_CAROUSEL_ROLE_COUNTS: Record<EcommerceCarouselRole, number> = { main: 1, scene: 4, detail: 3, variant: 1 };
 export const ECOMMERCE_REFERENCE_ROLE_MAX_COUNTS: Partial<Record<EcommerceCarouselRole, number>> = { scene: 4, detail: 3, variant: 1 };
 export const ECOMMERCE_CAROUSEL_ROLES: EcommerceCarouselRole[] = ["main", "scene", "detail", "variant"];
@@ -42,9 +43,11 @@ export function buildEcommerceCopyAnalysisPrompt(input: {
   skuImageCount: number;
   manufacturerReferenceImageCount: number;
   referenceCounts: Partial<Record<EcommerceCarouselRole, number>>;
+  styleGuide?: string;
 }) {
   const sceneCount = input.referenceCounts.scene ?? 0;
   const detailCount = input.referenceCounts.detail ?? 0;
+  const styleGuide = input.styleGuide?.trim() || CHUB_TWO_DEFAULT_STYLE_GUIDE;
   return [
     "You are the copy strategist for CHUB TWO, a youth-focused product brand.",
     `Analyze ${input.skuImageCount} product SKU image(s) and ${input.manufacturerReferenceImageCount} scene/detail/variant manufacturer reference image(s).`,
@@ -52,7 +55,7 @@ export function buildEcommerceCopyAnalysisPrompt(input: {
     "Translate and consolidate the manufacturer copy internally, then rewrite its real selling points into concise English copy with CHUB TWO's futuristic, youthful, premium Apple-like tone. Preserve the original meaning and product facts while making the language sharper for young consumers; do not blindly copy awkward wording or invent claims.",
     "Extract only product facts, names, model labels, visible functions, materials, colors, SKU differences, and manufacturer selling points that are supported by the images.",
     `Create exactly three English title/subtitle proposals for each generated TikTok Shop carousel slot: 1 main image, ${sceneCount} scene image(s), ${detailCount} detail/benefit image(s), and 1 variant/specification image. Do not create slots for missing scene or detail references.`,
-    "Use concise, bold, futuristic English for young consumers. The visual direction is Apple-like: restrained, premium, white background, black typography, high information density, and no obvious empty space.",
+    `Apply this editable style guide to every proposal: ${styleGuide}`,
     "Base every proposal on the relevant manufacturer source copy and visible product evidence. Main-1 should synthesize the strongest overall product promise from the available source copy. Scene slots should rewrite different use-case or lifestyle messages from the scene references. Detail slots should rewrite different feature or benefit messages from the detail references. Variant slots should explain only real SKU differences found in the SKU images or variant references.",
     "The first SKU is the only product reference for the main image. Create the main image from that SKU, the fixed person reference, the strongest supported manufacturer message, and the selected title. The variant slot must use all SKU differences when supported. Scene and detail slots must have distinct topics and must not reuse the same title direction across slots.",
     "Never invent specifications, certifications, performance numbers, prices, medical claims, or unsupported features.",
@@ -94,6 +97,7 @@ function imageParts(urls: string[]) {
 export async function analyzeEcommerceCopy(input: {
   skuImageUrls: string[];
   manufacturerReferenceImageUrls: Record<EcommerceCarouselRole, string[]>;
+  styleGuide?: string;
 }) {
   const referenceCounts = {
     scene: input.manufacturerReferenceImageUrls.scene?.length ?? 0,
@@ -104,7 +108,7 @@ export async function analyzeEcommerceCopy(input: {
   const message: OpenRouterMessage = {
     role: "user",
     content: [
-      { type: "text", text: buildEcommerceCopyAnalysisPrompt({ skuImageCount: input.skuImageUrls.length, manufacturerReferenceImageCount: referenceUrls.length, referenceCounts }) },
+      { type: "text", text: buildEcommerceCopyAnalysisPrompt({ skuImageCount: input.skuImageUrls.length, manufacturerReferenceImageCount: referenceUrls.length, referenceCounts, styleGuide: input.styleGuide }) },
       ...imageParts([...input.skuImageUrls, ...referenceUrls]),
     ],
   };
@@ -140,7 +144,9 @@ export function buildEcommerceCarouselPrompts(input: {
   primarySkuIndex: number;
   selectedCopyBySlot: Record<string, EcommerceCopyProposal>;
   manufacturerReferenceCountByRole: Partial<Record<EcommerceCarouselRole, number>>;
+  styleGuide?: string;
 }): Array<Pick<EcommerceImageSlot, "id" | "role" | "index" | "title" | "prompt" | "usePerson" | "selectedCopy">> {
+  const styleGuide = input.styleGuide?.trim() || CHUB_TWO_DEFAULT_STYLE_GUIDE;
   return getEcommerceCarouselSlots(input.manufacturerReferenceCountByRole).map((slot) => {
     const selectedCopy = input.selectedCopyBySlot[slot.id];
     const usePerson = slot.id === "main-1";
@@ -155,7 +161,7 @@ export function buildEcommerceCarouselPrompts(input: {
       slot.role === "scene" || slot.role === "detail" ? `This is ${slot.role} slot ${slot.index}; make its visual topic and composition distinct from the other ${slot.role} slots.` : "",
       `English headline to render accurately: ${selectedCopy?.title ?? ""}`,
       `English subheadline to render accurately: ${selectedCopy?.subtitle ?? ""}`,
-      "CHUB TWO fixed direction: extreme minimalism, Apple-like restraint, white background, black typography, futuristic but credible, aimed at young consumers. Show only the product, the relevant scene or detail, the selected headline, the selected subheadline, and the fixed CHUB TWO logo when applicable. No decorative clutter.",
+      `Editable style guide: ${styleGuide}`,
       usePerson ? `Use the fixed CHUB TWO person reference from ${CHUB_TWO_PERSON_URL}. The person is mandatory in the main image, positioned on the right, with the right hand reaching forward and holding the product.` : "Do not use the fixed CHUB TWO person reference in this image.",
       slot.role === "main" ? "Do not add the CHUB TWO logo to the first white-background main image." : "Use the CHUB TWO logo from the fixed reference URL in the top-left corner. Keep its shape, text, and colors accurate without covering the product or headline.",
       "Use English only for all newly rendered text. Render only one headline and one short subheadline. Ignore and remove every logo, watermark, corner badge, label, or text copied from manufacturer reference images; the only allowed added logo is the fixed CHUB TWO logo. Do not create icon grids, mini-cards, spec walls, callout bubbles, multiple product duplicates, extra captions, unrelated props, pets, prices, QR codes, or decorative filler.",

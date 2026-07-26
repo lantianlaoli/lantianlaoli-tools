@@ -171,6 +171,7 @@ export type EcommerceAssetsJob = {
   textLanguage: "en";
   imageResolution: "1K";
   imageAspectRatio: "1:1";
+  styleGuide: string;
   productSkuImageUrls: string[];
   primarySkuIndex: number;
   manufacturerReferenceImageUrls: Record<EcommerceCarouselRole, string[]>;

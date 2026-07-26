@@ -19,7 +19,7 @@ function validateReferences(value: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { productSkuDataUrls?: unknown; manufacturerReferenceGroups?: unknown };
+    const body = (await request.json()) as { productSkuDataUrls?: unknown; manufacturerReferenceGroups?: unknown; styleGuide?: unknown };
     const skuUrls = Array.isArray(body.productSkuDataUrls) ? body.productSkuDataUrls.filter((url): url is string => typeof url === "string" && Boolean(url.trim())) : [];
     if (!skuUrls.length) return NextResponse.json({ error: "At least one product SKU image is required." }, { status: 400 });
     const referenceError = validateReferences(body.manufacturerReferenceGroups);
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const groups = body.manufacturerReferenceGroups as Array<{ role: string; dataUrls: string[] }>;
     const manufacturerReferenceImageUrls = { main: [], scene: [], detail: [], variant: [] } as Record<"main" | "scene" | "detail" | "variant", string[]>;
     for (const group of groups) manufacturerReferenceImageUrls[group.role as keyof typeof manufacturerReferenceImageUrls] = group.dataUrls;
-    const result = await analyzeEcommerceCopy({ skuImageUrls: skuUrls, manufacturerReferenceImageUrls });
+    const result = await analyzeEcommerceCopy({ skuImageUrls: skuUrls, manufacturerReferenceImageUrls, styleGuide: typeof body.styleGuide === "string" ? body.styleGuide : undefined });
     return NextResponse.json({ success: true, slots: result.slots, usedFallback: result.usedFallback });
   } catch (error) {
     console.error("[ecommerce-assets/analyze]", error);

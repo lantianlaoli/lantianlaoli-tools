@@ -4,6 +4,7 @@ import {
   CHUB_TWO_PERSON_URL,
   ECOMMERCE_CAROUSEL_ROLES,
   buildEcommerceCarouselPrompts,
+  CHUB_TWO_DEFAULT_STYLE_GUIDE,
 } from "./ecommerce-assets";
 import { generateEcommerceAssetsJobId } from "./ecommerce-assets-store";
 import { createKieImageTask, getKieImageStatus, uploadKieImage } from "./kie";
@@ -40,6 +41,7 @@ export async function createEcommerceAssetsJob(input: {
   primarySkuIndex?: number;
   manufacturerReferenceGroups: unknown;
   selectedCopyBySlot: Record<string, EcommerceCopyProposal>;
+  styleGuide?: string;
 }) {
   const jobId = generateEcommerceAssetsJobId();
   const productDataUrls = input.productSkuDataUrls.filter(Boolean);
@@ -59,6 +61,7 @@ export async function createEcommerceAssetsJob(input: {
   } satisfies Record<EcommerceCarouselRole, string[]>;
   const personImageUrl = CHUB_TWO_PERSON_URL;
   const selectedCopyBySlot = input.selectedCopyBySlot;
+  const styleGuide = input.styleGuide?.trim() || CHUB_TWO_DEFAULT_STYLE_GUIDE;
   const prompts = buildEcommerceCarouselPrompts({
     skuImageCount: productSkuImageUrls.length,
     primarySkuIndex: 0,
@@ -68,6 +71,7 @@ export async function createEcommerceAssetsJob(input: {
       detail: manufacturerReferenceImageUrls.detail.length,
       variant: manufacturerReferenceImageUrls.variant.length,
     },
+    styleGuide,
   });
 
   const slots = await Promise.all(prompts.map(async (promptSlot) => {
@@ -89,6 +93,7 @@ export async function createEcommerceAssetsJob(input: {
     textLanguage: "en",
     imageResolution: "1K",
     imageAspectRatio: "1:1",
+    styleGuide,
     productSkuImageUrls,
     primarySkuIndex: 0,
     manufacturerReferenceImageUrls,

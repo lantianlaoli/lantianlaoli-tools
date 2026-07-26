@@ -12,6 +12,7 @@ export async function POST(request: Request) {
       primarySkuIndex?: number;
       manufacturerReferenceGroups?: unknown;
       selectedCopyBySlot?: Record<string, { id: string; title: string; subtitle: string }>;
+      styleGuide?: string;
     };
     const validUrls = (body.productSkuDataUrls ?? []).filter(Boolean);
     if (!validUrls.length) return NextResponse.json({ error: "At least one product SKU image is required." }, { status: 400 });
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
       primarySkuIndex: body.primarySkuIndex,
       manufacturerReferenceGroups: body.manufacturerReferenceGroups,
       selectedCopyBySlot,
+      styleGuide: body.styleGuide,
     });
 
     return NextResponse.json({ success: true, jobId: job.id, job }, { status: 202 });
