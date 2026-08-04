@@ -13,6 +13,7 @@ export async function POST(request: Request) {
       manufacturerReferenceGroups?: unknown;
       selectedCopyBySlot?: Record<string, { id: string; title: string; subtitle: string }>;
       styleGuide?: string;
+      generationConfig?: import("@/lib/types").EcommerceGenerationConfig;
     };
     const validUrls = (body.productSkuDataUrls ?? []).filter(Boolean);
     if (!validUrls.length) return NextResponse.json({ error: "At least one product SKU image is required." }, { status: 400 });
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
       manufacturerReferenceGroups: body.manufacturerReferenceGroups,
       selectedCopyBySlot,
       styleGuide: body.styleGuide,
+      generationConfig: body.generationConfig,
     });
 
     return NextResponse.json({ success: true, jobId: job.id, job }, { status: 202 });

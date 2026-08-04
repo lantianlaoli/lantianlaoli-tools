@@ -23,9 +23,9 @@ const features = {
     {
       href: "/ecommerce-assets",
       title: "TikTok Shop 九张轮播图",
-      description: "上传 CHUB TWO 多 SKU 和 1688 厂家参考图，先选择英文文案方案，再生成 9 张品牌轮播图。",
+      description: "上传 CHUB TWO 多 SKU 和 1688 厂家参考图，生成轮播图、商品标题、商品简述和统一 SKU 款式图。",
       icon: Sparkles,
-      meta: "CHUB TWO · AI 文案方案 · 9 张轮播图",
+      meta: "CHUB TWO · 商品信息 · SKU 款式图",
       action: "打开工作台",
     },
     {
@@ -96,10 +96,10 @@ const features = {
     },
     {
       href: "/ecommerce-assets",
-      title: "TikTok Shop 9-image carousel",
-      description: "Upload CHUB TWO SKU images and 1688 references, choose English copy proposals, and generate nine branded carousel images.",
+      title: "TikTok Shop product workstation",
+      description: "Upload CHUB TWO SKU images and 1688 references to generate carousel images, product titles, product briefs, and consistent SKU style images.",
       icon: Sparkles,
-      meta: "CHUB TWO · AI copy proposals · 9 images",
+      meta: "CHUB TWO · Product info · SKU styles",
       action: "Open workspace",
     },
     {

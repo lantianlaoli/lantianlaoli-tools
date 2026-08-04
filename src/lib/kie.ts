@@ -7,6 +7,7 @@ const URL_UPLOAD_URL = "https://kieai.redpandaai.co/api/file-url-upload";
 const STREAM_UPLOAD_URL = "https://kieai.redpandaai.co/api/file-stream-upload";
 const MODEL = "gpt-image-2-image-to-image";
 const SEEDANCE_2_FAST_MODEL = "bytedance/seedance-2-fast";
+const SEEDANCE_2_MINI_MODEL = "bytedance/seedance-2-mini";
 
 type KieRecordInfo = {
   code?: number;
@@ -42,7 +43,12 @@ function getKieApiKey() {
   return apiKey;
 }
 
-async function fetchWithRetry(url: string, options: RequestInit, retries = 3, timeoutMs = 30000) {
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 3,
+  timeoutMs = 30000,
+) {
   let lastError: unknown;
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     const controller = new AbortController();
@@ -63,19 +69,29 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = 3, ti
       clearTimeout(timeout);
       lastError = error;
       if (attempt === retries) throw error;
-      await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** (attempt - 1), 5000)));
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(1000 * 2 ** (attempt - 1), 5000)),
+      );
     }
   }
   throw lastError;
 }
 
-export async function uploadKieImage(dataUrl: string, fileName: string, uploadPath = "lantian-tools/references") {
+export async function uploadKieImage(
+  dataUrl: string,
+  fileName: string,
+  uploadPath = "lantian-tools/references",
+) {
   return uploadKieBase64File({ base64Data: dataUrl, fileName, uploadPath });
 }
 
 function readKieUploadDownloadUrl(payload: KieFileUploadResponse) {
   const downloadUrl = payload.data?.downloadUrl;
-  if (!payload.success || (payload.code !== undefined && payload.code !== 200) || typeof downloadUrl !== "string") {
+  if (
+    !payload.success ||
+    (payload.code !== undefined && payload.code !== 200) ||
+    typeof downloadUrl !== "string"
+  ) {
     throw new Error(payload.msg || "KIE upload did not return a download URL.");
   }
   return downloadUrl;
@@ -100,7 +116,9 @@ export async function uploadKieBase64File(input: {
   });
 
   if (!response.ok) {
-    throw new Error(`KIE upload failed: ${response.status} ${await response.text()}`);
+    throw new Error(
+      `KIE upload failed: ${response.status} ${await response.text()}`,
+    );
   }
   return readKieUploadDownloadUrl(await response.json());
 }
@@ -124,7 +142,9 @@ export async function uploadKieUrlFile(input: {
   });
 
   if (!response.ok) {
-    throw new Error(`KIE URL upload failed: ${response.status} ${await response.text()}`);
+    throw new Error(
+      `KIE URL upload failed: ${response.status} ${await response.text()}`,
+    );
   }
   return readKieUploadDownloadUrl(await response.json());
 }
@@ -138,7 +158,11 @@ export async function uploadKieStreamFile(input: {
   const file =
     input.file instanceof Blob
       ? input.file
-      : new Blob([input.file instanceof Uint8Array ? new Uint8Array(input.file) : input.file]);
+      : new Blob([
+          input.file instanceof Uint8Array
+            ? new Uint8Array(input.file)
+            : input.file,
+        ]);
   if (input.fileName) formData.set("file", file, input.fileName);
   else formData.set("file", file);
   formData.set("uploadPath", input.uploadPath);
@@ -153,7 +177,9 @@ export async function uploadKieStreamFile(input: {
   });
 
   if (!response.ok) {
-    throw new Error(`KIE stream upload failed: ${response.status} ${await response.text()}`);
+    throw new Error(
+      `KIE stream upload failed: ${response.status} ${await response.text()}`,
+    );
   }
   return readKieUploadDownloadUrl(await response.json());
 }
@@ -182,12 +208,16 @@ export async function createKieImageTask(input: {
   });
 
   if (!response.ok) {
-    throw new Error(`KIE task creation failed: ${response.status} ${await response.text()}`);
+    throw new Error(
+      `KIE task creation failed: ${response.status} ${await response.text()}`,
+    );
   }
   const payload = await response.json();
   const taskId = payload?.data?.taskId;
   if (payload?.code !== 200 || typeof taskId !== "string") {
-    throw new Error(payload?.msg || "KIE task creation did not return a taskId.");
+    throw new Error(
+      payload?.msg || "KIE task creation did not return a taskId.",
+    );
   }
   return taskId;
 }
@@ -199,52 +229,118 @@ export async function createKieSeedanceVideoTask(input: {
   resolution: "480p" | "720p";
   duration: number;
 }) {
-  const response = await fetchWithRetry(CREATE_TASK_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${getKieApiKey()}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: SEEDANCE_2_FAST_MODEL,
-      input: {
-        prompt: input.prompt,
-        reference_image_urls: input.referenceImageUrls.filter(Boolean).slice(0, 9),
-        resolution: input.resolution,
-        aspect_ratio: input.aspectRatio,
-        duration: input.duration,
-        generate_audio: true,
-        web_search: false,
-        nsfw_checker: true,
+  const response = await fetchWithRetry(
+    CREATE_TASK_URL,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getKieApiKey()}`,
+        "Content-Type": "application/json",
       },
-    }),
-  }, 5, 30000);
+      body: JSON.stringify({
+        model: SEEDANCE_2_FAST_MODEL,
+        input: {
+          prompt: input.prompt,
+          reference_image_urls: input.referenceImageUrls
+            .filter(Boolean)
+            .slice(0, 9),
+          resolution: input.resolution,
+          aspect_ratio: input.aspectRatio,
+          duration: input.duration,
+          generate_audio: true,
+          web_search: false,
+          nsfw_checker: true,
+        },
+      }),
+    },
+    5,
+    30000,
+  );
 
   if (!response.ok) {
-    throw new Error(`KIE Seedance task creation failed: ${response.status} ${await response.text()}`);
+    throw new Error(
+      `KIE Seedance task creation failed: ${response.status} ${await response.text()}`,
+    );
   }
   const payload = await response.json();
   const taskId = payload?.data?.taskId;
   if (payload?.code !== 200 || typeof taskId !== "string") {
-    throw new Error(payload?.msg || "KIE Seedance task creation did not return a taskId.");
+    throw new Error(
+      payload?.msg || "KIE Seedance task creation did not return a taskId.",
+    );
   }
+  return taskId;
+}
+
+export async function createKieSeedance2MiniVideoTask(input: {
+  prompt: string;
+  referenceImageUrls: string[];
+}) {
+  const response = await fetchWithRetry(
+    CREATE_TASK_URL,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getKieApiKey()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: SEEDANCE_2_MINI_MODEL,
+        input: {
+          prompt: input.prompt,
+          reference_image_urls: input.referenceImageUrls
+            .filter(Boolean)
+            .slice(0, 9),
+          reference_video_urls: [],
+          reference_audio_urls: [],
+          generate_audio: true,
+          resolution: "720p",
+          aspect_ratio: "9:16",
+          duration: 15,
+          web_search: false,
+          nsfw_checker: true,
+        },
+      }),
+    },
+    5,
+    30000,
+  );
+  if (!response.ok)
+    throw new Error(
+      `KIE Seedance 2 Mini task creation failed: ${response.status} ${await response.text()}`,
+    );
+  const payload = await response.json();
+  const taskId = payload?.data?.taskId;
+  if (payload?.code !== 200 || typeof taskId !== "string")
+    throw new Error(
+      payload?.msg ||
+        "KIE Seedance 2 Mini task creation did not return a taskId.",
+    );
   return taskId;
 }
 
 export function normalizeKieRecordInfo(payload: KieRecordInfo) {
   const state = payload.data?.state?.toLowerCase() ?? "processing";
   const status: GenerationJob["status"] =
-    state === "success" || state === "fail" || state === "waiting" ? state : "processing";
+    state === "success" || state === "fail" || state === "waiting"
+      ? state
+      : "processing";
   let resultUrl: string | undefined;
   if (state === "success" && payload.data?.resultJson) {
     const parsed = JSON.parse(payload.data.resultJson);
-    if (Array.isArray(parsed?.resultUrls) && typeof parsed.resultUrls[0] === "string") {
+    if (
+      Array.isArray(parsed?.resultUrls) &&
+      typeof parsed.resultUrls[0] === "string"
+    ) {
       resultUrl = parsed.resultUrls[0];
     } else if (typeof parsed?.video_url === "string") {
       resultUrl = parsed.video_url;
     } else if (typeof parsed?.url === "string") {
       resultUrl = parsed.url;
-    } else if (Array.isArray(parsed?.videos) && typeof parsed.videos[0] === "string") {
+    } else if (
+      Array.isArray(parsed?.videos) &&
+      typeof parsed.videos[0] === "string"
+    ) {
       resultUrl = parsed.videos[0];
     }
   }
@@ -258,18 +354,26 @@ export function normalizeKieRecordInfo(payload: KieRecordInfo) {
 }
 
 export async function getKieImageStatus(taskId: string) {
-  const response = await fetchWithRetry(`${RECORD_INFO_URL}?taskId=${encodeURIComponent(taskId)}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${getKieApiKey()}`,
+  const response = await fetchWithRetry(
+    `${RECORD_INFO_URL}?taskId=${encodeURIComponent(taskId)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${getKieApiKey()}`,
+      },
     },
-  }, 3, 15000);
+    3,
+    15000,
+  );
 
   if (!response.ok) {
-    throw new Error(`KIE status check failed: ${response.status} ${await response.text()}`);
+    throw new Error(
+      `KIE status check failed: ${response.status} ${await response.text()}`,
+    );
   }
   const payload = (await response.json()) as KieRecordInfo;
-  if (payload.code !== 200) throw new Error(payload.msg || "KIE status check failed.");
+  if (payload.code !== 200)
+    throw new Error(payload.msg || "KIE status check failed.");
 
   return normalizeKieRecordInfo(payload);
 }

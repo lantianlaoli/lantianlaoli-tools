@@ -34,13 +34,7 @@ export type ParsedWorkbook = {
   imageCount: number;
 };
 
-export type KieAspectRatio =
-  | "auto"
-  | "1:1"
-  | "9:16"
-  | "16:9"
-  | "4:3"
-  | "3:4";
+export type KieAspectRatio = "auto" | "1:1" | "9:16" | "16:9" | "4:3" | "3:4";
 
 export type KieResolution = "1K" | "2K" | "4K";
 
@@ -69,8 +63,18 @@ export type EcommerceTextLanguage = "en" | "zh";
 
 export type TikTokPricingCountry = "SG" | "MY" | "TH" | "VN" | "PH";
 export type TikTokPricingMarket = TikTokPricingCountry;
-export type TikTokPricingRegion = "default" | "west" | "east" | "zone-a" | "zone-b" | "zone-c" | "zone-d" | "manila" | "other";
+export type TikTokPricingRegion =
+  | "default"
+  | "west"
+  | "east"
+  | "zone-a"
+  | "zone-b"
+  | "zone-c"
+  | "zone-d"
+  | "manila"
+  | "other";
 export type TikTokPricingChannel = "Standard" | "Economy";
+export type TikTokTaxProfile = "individual" | "corporate";
 export type TikTokPricingMarketInput = {
   country: TikTokPricingCountry;
   currency: "SGD" | "MYR" | "THB" | "VND" | "PHP";
@@ -80,6 +84,7 @@ export type TikTokPricingMarketInput = {
   supportFee: number;
   region: TikTokPricingRegion;
   channel: TikTokPricingChannel;
+  taxProfile: TikTokTaxProfile;
   includeLocalDeliveryCost: boolean;
   logisticsOverride?: number;
 };
@@ -106,6 +111,8 @@ export type TikTokPricingMarketResult = {
   discountedPrice: number;
   estimatedProfit: number;
   feesAtSuggestedPrice: number;
+  taxCostsAtSuggestedPrice: number;
+  taxBreakdown: string[];
   freightBasis: string;
   warnings: string[];
 };
@@ -118,7 +125,11 @@ export type TikTokPricingAiRecommendation = {
   recommendation: string;
   reasons: string[];
   risks: string[];
-  priceAdjustments: Array<{ country: TikTokPricingCountry; suggestedPrice: number; rationale: string }>;
+  priceAdjustments: Array<{
+    country: TikTokPricingCountry;
+    suggestedPrice: number;
+    rationale: string;
+  }>;
 };
 
 export type EcommerceSlotStatus = "waiting" | "processing" | "success" | "fail";
@@ -137,10 +148,27 @@ export type EcommerceManufacturerReferenceGroup = {
   dataUrls: string[];
 };
 
+export type EcommerceGenerationConfig = {
+  styleGuide: string;
+  person: { imageUrl: string; prompt: string };
+  logo: { imageUrl: string; prompt: string };
+  mainComposition: { imageUrl: string; prompt: string };
+};
+
 export type EcommerceCopyProposal = {
   id: string;
   title: string;
   subtitle: string;
+};
+
+export type EcommerceProductTitleProposal = {
+  id: string;
+  title: string;
+  rationale?: string;
+};
+
+export type EcommerceProductBrief = {
+  content: string;
 };
 
 export type EcommerceSlotCopyOptions = {
@@ -172,6 +200,7 @@ export type EcommerceAssetsJob = {
   imageResolution: "1K";
   imageAspectRatio: "1:1";
   styleGuide: string;
+  generationConfig?: EcommerceGenerationConfig;
   productSkuImageUrls: string[];
   primarySkuIndex: number;
   manufacturerReferenceImageUrls: Record<EcommerceCarouselRole, string[]>;
@@ -182,6 +211,109 @@ export type EcommerceAssetsJob = {
   personImageUrl?: string;
   carouselImages: EcommerceImageSlot[];
   error?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type EcommerceStyleImageSlot = {
+  id: string;
+  skuIndex: number;
+  sourceSkuImageUrl: string;
+  taskId: string;
+  status: EcommerceSlotStatus;
+  resultUrl?: string;
+  prompt: string;
+  error?: string;
+  autoRetryCount?: number;
+};
+
+export type EcommerceStyleImageJob = {
+  id: string;
+  status: "preparing" | "processing" | "completed" | "failed";
+  styleGuide: string;
+  productSkuImageUrls: string[];
+  skuIds: string[];
+  masterStyleImageUrl?: string;
+  styleImages: EcommerceStyleImageSlot[];
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type EcommerceStoryboardSellingPoint = {
+  id: string;
+  title: string;
+  description: string;
+};
+
+export type EcommerceStoryboardStage = "opening" | "continuation" | "closing";
+
+export type EcommerceStoryboardStoryPlan = {
+  productName: string;
+  targetAudience: string;
+  buyerPainPoint: string;
+  solutionAngle: string;
+  title: string;
+  description: string;
+  hashtags: string[];
+  setting: string;
+  continuity: string;
+  visualStyle: string;
+  stages: Array<{
+    id: string;
+    stage: EcommerceStoryboardStage;
+    sellingPoint: EcommerceStoryboardSellingPoint;
+    transitionFromPrevious: string;
+    transitionToNext: string;
+  }>;
+};
+
+export type EcommerceStoryboardCoverTask = {
+  taskId: string;
+  status: EcommerceSlotStatus;
+  resultUrl?: string;
+  error?: string;
+  prompt: string;
+};
+
+export type EcommerceStoryboardVideoTask = {
+  taskId: string;
+  status: "idle" | "processing" | "success" | "fail";
+  resultUrl?: string;
+  error?: string;
+  prompt: string;
+};
+
+export type EcommerceStoryboardSlot = {
+  id: string;
+  index: number;
+  stage?: EcommerceStoryboardStage;
+  sellingPoint: EcommerceStoryboardSellingPoint;
+  transitionFromPrevious?: string;
+  transitionToNext?: string;
+  manufacturerReferenceImageUrls?: string[];
+  taskId: string;
+  status: EcommerceSlotStatus;
+  resultUrl?: string;
+  error?: string;
+  prompt: string;
+  video?: EcommerceStoryboardVideoTask;
+};
+
+export type EcommerceStoryboardJob = {
+  id: string;
+  status: "preparing" | "processing" | "completed" | "failed";
+  productSkuImageUrl: string;
+  productViewImageUrls?: string[];
+  personImageUrl: string;
+  manufacturerReferenceImageUrls?: string[];
+  storyPlan?: EcommerceStoryboardStoryPlan;
+  title?: string;
+  description?: string;
+  hashtags?: string[];
+  cover?: EcommerceStoryboardCoverTask;
+  sellingPoints: EcommerceStoryboardSellingPoint[];
+  slots: EcommerceStoryboardSlot[];
   createdAt: number;
   updatedAt: number;
 };
@@ -197,7 +329,10 @@ export type SocialCoverStylePreset = {
   prompt: string;
 };
 
-export type SocialCoverBillingMode = "initial" | "system-retry-no-credit" | "user-regeneration";
+export type SocialCoverBillingMode =
+  | "initial"
+  | "system-retry-no-credit"
+  | "user-regeneration";
 
 export type SocialCoverTitleSet = Record<SocialCoverLanguage, string>;
 
@@ -207,7 +342,9 @@ export type SocialCoverCreateRequest = {
   title: string;
   styleGuide?: string;
   languages?: SocialCoverLanguage[];
-  aspectRatiosByLanguage?: Partial<Record<SocialCoverLanguage, SocialCoverAspectRatio[]>>;
+  aspectRatiosByLanguage?: Partial<
+    Record<SocialCoverLanguage, SocialCoverAspectRatio[]>
+  >;
   aspectRatios?: SocialCoverAspectRatio[];
   variantsPerGroup?: SocialCoverVariantCount;
   resolution?: KieResolution;
@@ -254,7 +391,12 @@ export type SocialCoverJob = {
   updatedAt: number;
 };
 
-export type ExpoPhotoKind = "company_intro" | "product" | "contact" | "mixed" | "unknown";
+export type ExpoPhotoKind =
+  | "company_intro"
+  | "product"
+  | "contact"
+  | "mixed"
+  | "unknown";
 
 export type ExpoAtlasSlotStatus = "waiting" | "processing" | "success" | "fail";
 
@@ -400,14 +542,21 @@ export type ExpoHunterComment = {
   confidence: number;
 };
 
-export type ExpoHunterDiscussion = ExpoHunterLead | ExpoHunterIndustryIntel | ExpoHunterComment;
+export type ExpoHunterDiscussion =
+  | ExpoHunterLead
+  | ExpoHunterIndustryIntel
+  | ExpoHunterComment;
 
 export type ExpoHunterSubredditDiscussionGroup = {
   subreddit: string;
   discussions: ExpoHunterDiscussion[];
 };
 
-export type ExpoHunterSlotStatus = "waiting" | "processing" | "success" | "fail";
+export type ExpoHunterSlotStatus =
+  | "waiting"
+  | "processing"
+  | "success"
+  | "fail";
 
 export type ExpoHunterExpoResult = {
   expo: ExpoHunterExpo;
