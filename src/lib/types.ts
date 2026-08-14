@@ -132,6 +132,25 @@ export type TikTokPricingAiRecommendation = {
   }>;
 };
 
+export type EcommercePricingConfig = {
+  countries: Array<Extract<TikTokPricingCountry, "SG" | "MY">>;
+  packagingCostRmb: number;
+  buyerPayPercent: number;
+  targetMarginPercent: number;
+  affiliateRate: number;
+  markets: Record<
+    Extract<TikTokPricingCountry, "SG" | "MY">,
+    TikTokPricingMarketInput
+  >;
+};
+
+export type EcommercePricingResult = {
+  country: Extract<TikTokPricingCountry, "SG" | "MY">;
+  calculation: TikTokPricingCalculation;
+  ai: TikTokPricingAiRecommendation | null;
+  aiError?: string;
+};
+
 export type EcommerceSlotStatus = "waiting" | "processing" | "success" | "fail";
 export type EcommerceCarouselRole = "main" | "scene" | "detail" | "variant";
 
@@ -150,6 +169,7 @@ export type EcommerceManufacturerReferenceGroup = {
 
 export type EcommerceGenerationConfig = {
   styleGuide: string;
+  pricing?: EcommercePricingConfig;
   person: { imageUrl: string; prompt: string };
   logo: { imageUrl: string; prompt: string };
   mainComposition: { imageUrl: string; prompt: string };
@@ -276,8 +296,12 @@ export type EcommerceStoryboardCoverTask = {
   prompt: string;
 };
 
+export type EcommerceStoryboardVideoProvider = "seedance-2-mini";
+
 export type EcommerceStoryboardVideoTask = {
   taskId: string;
+  provider: EcommerceStoryboardVideoProvider;
+  model: "bytedance/seedance-2-mini";
   status: "idle" | "processing" | "success" | "fail";
   resultUrl?: string;
   error?: string;
@@ -316,6 +340,33 @@ export type EcommerceStoryboardJob = {
   slots: EcommerceStoryboardSlot[];
   createdAt: number;
   updatedAt: number;
+};
+
+export type EcommerceHistoryRecord = {
+  id: string;
+  productName: string;
+  skuIds: string[];
+  createdAt: number;
+  updatedAt: number;
+  status: "processing" | "completed" | "partial" | "failed";
+  outputKinds: Array<"info" | "carousel" | "storyboard" | "style" | "pricing">;
+  thumbnails: string[];
+  source: {
+    skuImageUrls: string[];
+    productViewImageUrls: string[];
+    manufacturerReferenceImageUrls: Record<EcommerceCarouselRole, string[]>;
+  };
+  snapshot: {
+    titles?: EcommerceProductTitleProposal[];
+    brief?: string;
+    carouselJob?: EcommerceAssetsJob;
+    storyboardJob?: EcommerceStoryboardJob;
+    styleImageJob?: EcommerceStyleImageJob;
+    pricingResults?: EcommercePricingResult[];
+    priceRmb?: string;
+    weightG?: string;
+    pricingConfig?: EcommercePricingConfig;
+  };
 };
 
 export type SocialCoverLanguage = EcommerceTextLanguage;

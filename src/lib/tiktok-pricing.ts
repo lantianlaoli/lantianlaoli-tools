@@ -109,6 +109,24 @@ export const TIKTOK_REFERENCE = {
   },
 } as const;
 
+export function defaultTikTokPricingMarket(
+  country: Extract<TikTokPricingCountry, "SG" | "MY">,
+): TikTokPricingMarketInput {
+  const reference = TIKTOK_REFERENCE.countries[country];
+  return {
+    country,
+    currency: reference.currency,
+    exchangeRateRmbPerLocal: reference.exchangeRateRmbPerLocal,
+    commissionRate: reference.commissionRate,
+    transactionRate: reference.transactionRate,
+    supportFee: 0,
+    region: country === "MY" ? "west" : "default",
+    channel: "Standard",
+    taxProfile: "individual",
+    includeLocalDeliveryCost: false,
+  };
+}
+
 export function getChargeableWeight(
   input: Pick<TikTokPricingRequest, "weightG">,
 ) {

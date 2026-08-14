@@ -5,7 +5,9 @@ import type {
   EcommerceImageSlot,
   EcommerceSlotCopyOptions,
   EcommerceGenerationConfig,
+  TikTokPricingMarketInput,
 } from "./types";
+import { defaultTikTokPricingMarket } from "./tiktok-pricing";
 
 export const CHUB_TWO_LOGO_URL =
   "https://i.postimg.cc/fLDVv53S/8bc7417a-5846-424c-8b81-401a42d87339.png";
@@ -17,6 +19,17 @@ export const CHUB_TWO_DEFAULT_STYLE_GUIDE =
   "CHUB TWO brand direction. Apple-like restraint with a futuristic, youthful feel for young consumers. Use a white background, black typography, English only, 1:1 square composition, 1K quality, and fill the frame with the product or relevant scene without obvious empty space. Keep the visual system extremely minimalist: one clear product focus, one short headline, one short subtitle, and only the fixed CHUB TWO logo where applicable. Avoid decorative clutter, mini-cards, icon grids, specification walls, extra products, unrelated props, pets, prices, QR codes, and copied manufacturer logos or watermarks.";
 export const CHUB_TWO_DEFAULT_GENERATION_CONFIG: EcommerceGenerationConfig = {
   styleGuide: CHUB_TWO_DEFAULT_STYLE_GUIDE,
+  pricing: {
+    countries: ["SG", "MY"],
+    packagingCostRmb: 0,
+    buyerPayPercent: 40,
+    targetMarginPercent: 20,
+    affiliateRate: 0,
+    markets: {
+      SG: defaultTikTokPricingMarket("SG"),
+      MY: defaultTikTokPricingMarket("MY"),
+    } satisfies Record<"SG" | "MY", TikTokPricingMarketInput>,
+  },
   person: {
     imageUrl: CHUB_TWO_PERSON_URL,
     prompt:

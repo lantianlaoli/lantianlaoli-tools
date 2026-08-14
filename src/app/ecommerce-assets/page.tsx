@@ -3,14 +3,22 @@
 import Link from "next/link";
 import {
   Check,
+  Camera,
+  Calculator,
+  ChevronRight,
   Copy as CopyIcon,
   Download,
   Film,
+  History,
+  Images,
   Loader2,
+  Package,
   Plus,
   RefreshCw,
+  Search,
   Settings2,
   Sparkles,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -18,18 +26,31 @@ import type {
   EcommerceAssetsJob,
   EcommerceCarouselRole,
   EcommerceGenerationConfig,
+  EcommerceHistoryRecord,
   EcommerceImageSlot,
   EcommerceProductTitleProposal,
   EcommerceStyleImageJob,
   EcommerceStyleImageSlot,
   EcommerceStoryboardJob,
   EcommerceStoryboardSlot,
+  EcommercePricingResult,
+  EcommercePricingConfig,
+  TikTokPricingMarketInput,
 } from "@/lib/types";
 import {
   CHUB_TWO_DEFAULT_GENERATION_CONFIG,
   CHUB_TWO_PERSON_URL,
   ECOMMERCE_CAROUSEL_ROLE_COUNTS,
 } from "@/lib/ecommerce-assets";
+import {
+  defaultTikTokPricingMarket,
+} from "@/lib/tiktok-pricing";
+import {
+  ECOMMERCE_HISTORY_STORAGE_KEY,
+  ECOMMERCE_HISTORY_LIMIT,
+  normalizeEcommerceHistory,
+  saveEcommerceHistory,
+} from "@/lib/ecommerce-history";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -45,38 +66,32 @@ const SKU_ID_STOP_WORDS = new Set([
   "FINAL",
 ]);
 const CONFIG_STORAGE_KEY = "chub-two-generation-config";
+const OUTPUT_KEYS: OutputKey[] = ["info", "carousel", "storyboard", "style", "pricing"];
 type UploadItem = { id: string; dataUrl: string; fileName: string };
-type OutputKey = "info" | "carousel" | "storyboard" | "style";
+type OutputKey = "info" | "carousel" | "storyboard" | "style" | "pricing";
 type OutputStatus = "idle" | "processing" | "completed" | "failed";
+type UiLanguage = "zh" | "en";
 type ProductViewKey = "front" | "side" | "back";
 const PRODUCT_VIEW_KEYS: ProductViewKey[] = ["front", "side", "back"];
-const PRODUCT_VIEW_LABELS: Record<ProductViewKey, string> = {
-  front: "正面",
-  side: "侧面",
-  back: "背面",
-};
 
-const copy = {
-  title: "CHUB TWO TikTok Shop 生成工作台",
-  subtitle:
-    "上传 SKU 与厂家参考图，选择要生成的内容，AI 会并行处理并统一管理结果。",
-  sku: "1. 产品 SKU 图片",
-  skuHint: "至少上传 1 张。第一张默认作为主产品参考，支持调整顺序。",
-  refs: "2. 1688 厂家参考图",
-  refsHint:
-    "场景图和细节卖点图支持一次多选；上传多少就参考多少。变体规格图完全基于 SKU 原图原创生成。",
+const ZH_COPY = {
+  title: "TikTok Shop 上品神器",
+  subtitle: "",
+  sku: "产品 SKU 图片",
+  refs: "厂家参考图",
   config: "生成配置",
   configHint: "人物、Logo、主图构图和风格限定只作用于新任务。",
-  workstation: "3. 统一生成模块",
+  workstation: "统一生成模块",
   info: "商品标题与简述",
-  carousel: "TikTok Shop 轮播图",
-  storyboard: "视频分镜图",
+  carousel: "商品图片资产",
+  storyboard: "视频素材生成",
   style: "SKU 款式图",
+  pricing: "AI 推荐价格",
   generate: "生成已选内容",
   generating: "生成中…",
   selectAtLeast: "请至少勾选一项生成内容。",
   needSku: "请至少上传 1 张产品 SKU 图片。",
-  needFrontView: "请上传产品正面视图，才能生成视频分镜图。",
+  needFrontView: "请至少上传 1 张 SKU 主图，才能生成视频素材。",
   needManufacturerReference:
     "请至少上传 1 张 1688 厂家参考图，才能生成商品标题和简述。",
   upload: "批量上传",
@@ -88,18 +103,57 @@ const copy = {
   failed: "生成失败",
 };
 
+const EN_COPY = {
+  title: "TikTok Shop Product Listing Wizard",
+  subtitle: "",
+  sku: "Product SKU Images",
+  refs: "Manufacturer Reference Images",
+  config: "Generation Settings",
+  configHint: "Person, logo, hero composition, and style rules apply to new tasks only.",
+  workstation: "Generation Modules",
+  info: "Product Title & Description",
+  carousel: "Product Image Assets",
+  storyboard: "Video Asset Generation",
+  style: "SKU Style Images",
+  pricing: "AI Price Recommendations",
+  generate: "Generate Selected",
+  generating: "Generating…",
+  selectAtLeast: "Select at least one generation module.",
+  needSku: "Upload at least one product SKU image.",
+  needFrontView: "Upload at least one SKU main image before generating video assets.",
+  needManufacturerReference: "Upload at least one manufacturer reference image for the product title and description.",
+  upload: "Upload",
+  mainSku: "Primary Product Reference",
+  setPrimary: "Set as Primary",
+  remove: "Remove",
+  download: "Download",
+  retry: "Retry",
+  failed: "Generation failed",
+};
+
+function productViewLabel(role: ProductViewKey, language: UiLanguage) {
+  return language === "en"
+    ? { front: "Front", side: "Side", back: "Back" }[role]
+    : { front: "正面", side: "侧面", back: "背面" }[role];
+}
+
 function Panel({
   title,
   subtitle,
+  icon,
   children,
 }: {
   title: string;
   subtitle?: string;
+  icon?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="rounded-xl border border-white/10 bg-[#151514] p-5">
-      <h2 className="text-base font-semibold text-zinc-100">{title}</h2>
+      <h2 className="flex items-center gap-2 text-base font-semibold text-zinc-100">
+        {icon ? <span className="text-lime-200">{icon}</span> : null}
+        {title}
+      </h2>
       {subtitle ? (
         <p className="mt-1 text-xs leading-5 text-zinc-500">{subtitle}</p>
       ) : null}
@@ -108,25 +162,25 @@ function Panel({
   );
 }
 
-function readImage(file: File) {
+function readImage(file: File, language: UiLanguage = "zh") {
   if (!IMAGE_TYPES.has(file.type))
-    return Promise.reject(new Error("请使用 PNG、JPG 或 WEBP 图片。"));
+    return Promise.reject(new Error(language === "en" ? "Use PNG, JPG, or WEBP images." : "请使用 PNG、JPG 或 WEBP 图片。"));
   if (file.size > MAX_IMAGE_BYTES)
-    return Promise.reject(new Error("每张图片不能超过 10MB。"));
+    return Promise.reject(new Error(language === "en" ? "Each image must be 10MB or smaller." : "每张图片不能超过 10MB。"));
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("图片读取失败。"));
+    reader.onerror = () => reject(new Error(language === "en" ? "Failed to read the image." : "图片读取失败。"));
     reader.readAsDataURL(file);
   });
 }
 
-function roleLabel(role: EcommerceCarouselRole) {
+function roleLabel(role: EcommerceCarouselRole, language: UiLanguage = "zh") {
   return {
-    main: "主图",
-    scene: "场景图",
-    detail: "细节卖点图",
-    variant: "变体规格图",
+    main: language === "en" ? "Main Image" : "主图",
+    scene: language === "en" ? "Scene Images" : "场景图",
+    detail: language === "en" ? "Detail & Benefit Images" : "细节卖点图",
+    variant: language === "en" ? "Variant Images" : "变体规格图",
   }[role];
 }
 
@@ -152,15 +206,15 @@ function getStyleSkuId(
   );
 }
 
-function Status({ status }: { status: OutputStatus }) {
+function Status({ status, language = "zh" }: { status: OutputStatus; language?: UiLanguage }) {
   const label =
     status === "processing"
-      ? "生成中"
+      ? language === "en" ? "Processing" : "生成中"
       : status === "completed"
-        ? "已完成"
+        ? language === "en" ? "Completed" : "已完成"
         : status === "failed"
-          ? "失败"
-          : "未生成";
+          ? language === "en" ? "Failed" : "失败"
+          : language === "en" ? "Not generated" : "未生成";
   return (
     <span
       className={`rounded-full px-2 py-1 text-[11px] font-semibold ${status === "completed" ? "bg-lime-300/15 text-lime-200" : status === "failed" ? "bg-red-500/15 text-red-200" : "bg-white/10 text-zinc-400"}`}
@@ -173,15 +227,15 @@ function Status({ status }: { status: OutputStatus }) {
   );
 }
 
-function ImageStatus({ status }: { status: EcommerceImageSlot["status"] }) {
+function ImageStatus({ status, language = "zh" }: { status: EcommerceImageSlot["status"]; language?: UiLanguage }) {
   const label =
     status === "success"
-      ? "已完成"
+      ? language === "en" ? "Completed" : "已完成"
       : status === "fail"
-        ? "失败"
+        ? language === "en" ? "Failed" : "失败"
         : status === "processing"
-          ? "生成中"
-          : "等待生成";
+          ? language === "en" ? "Processing" : "生成中"
+          : language === "en" ? "Waiting" : "等待生成";
   return <span className="text-[11px] text-zinc-500">{label}</span>;
 }
 
@@ -226,6 +280,9 @@ function htmlToPlainText(html: string) {
 }
 
 export default function EcommerceAssetsPage() {
+  const [language, setLanguage] = useState<UiLanguage>("zh");
+  const copy = language === "en" ? EN_COPY : ZH_COPY;
+  const tx = (zh: string, en: string) => (language === "en" ? en : zh);
   const [error, setError] = useState("");
   const [skus, setSkus] = useState<UploadItem[]>([]);
   const [productViews, setProductViews] = useState<
@@ -238,18 +295,33 @@ export default function EcommerceAssetsPage() {
     CHUB_TWO_DEFAULT_GENERATION_CONFIG,
   );
   const [configOpen, setConfigOpen] = useState(false);
+  const [pricingConfigOpen, setPricingConfigOpen] = useState(false);
+  const [priceRmb, setPriceRmb] = useState("");
+  const [weightG, setWeightG] = useState("");
+  const [pricingResults, setPricingResults] = useState<EcommercePricingResult[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyRecords, setHistoryRecords] = useState<EcommerceHistoryRecord[]>(
+    [],
+  );
+  const [historyQuery, setHistoryQuery] = useState("");
+  const historyHydrated = useRef(false);
+  const currentHistoryId = useRef<string | null>(null);
+  const lastInputFingerprint = useRef<string | null>(null);
+  const productSessionVersion = useRef(0);
   const hydrated = useRef(false);
   const [selected, setSelected] = useState<Record<OutputKey, boolean>>({
     info: true,
     carousel: true,
     storyboard: false,
     style: true,
+    pricing: true,
   });
   const [statuses, setStatuses] = useState<Record<OutputKey, OutputStatus>>({
     info: "idle",
     carousel: "idle",
     storyboard: "idle",
     style: "idle",
+    pricing: "idle",
   });
   const [titles, setTitles] = useState<EcommerceProductTitleProposal[]>([]);
   const [brief, setBrief] = useState("");
@@ -290,6 +362,7 @@ export default function EcommerceAssetsPage() {
   const carouselTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const styleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storyboardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const storyboardPollVersion = useRef(0);
   const storyboardVideoTimer = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -297,6 +370,11 @@ export default function EcommerceAssetsPage() {
 
   useEffect(() => {
     window.queueMicrotask(() => {
+      setLanguage(
+        new URLSearchParams(window.location.search).get("lang") === "en"
+          ? "en"
+          : "zh",
+      );
       try {
         const saved = window.localStorage.getItem(CONFIG_STORAGE_KEY);
         if (saved)
@@ -307,6 +385,15 @@ export default function EcommerceAssetsPage() {
       } catch {
         /* use defaults */
       }
+      try {
+        const savedHistory = window.localStorage.getItem(
+          ECOMMERCE_HISTORY_STORAGE_KEY,
+        );
+        setHistoryRecords(normalizeEcommerceHistory(savedHistory ? JSON.parse(savedHistory) : []));
+      } catch {
+        setHistoryRecords([]);
+      }
+      historyHydrated.current = true;
       hydrated.current = true;
     });
     return () => {
@@ -323,19 +410,27 @@ export default function EcommerceAssetsPage() {
       window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(config));
   }, [config]);
 
+  function markProductEdited() {
+    if (lastInputFingerprint.current === "__history__") {
+      currentHistoryId.current = null;
+      lastInputFingerprint.current = null;
+    }
+  }
+
   async function addSkuFiles(files: FileList | File[]) {
+    markProductEdited();
     setError("");
     try {
       const next = await Promise.all(
         Array.from(files).map(async (file) => ({
           id: crypto.randomUUID(),
-          dataUrl: await readImage(file),
+          dataUrl: await readImage(file, language),
           fileName: file.name,
         })),
       );
       setSkus((current) => [...current, ...next]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "图片读取失败。");
+      setError(e instanceof Error ? e.message : tx("图片读取失败。", "Failed to read the image."));
     }
   }
 
@@ -345,16 +440,17 @@ export default function EcommerceAssetsPage() {
   ) {
     const file = Array.from(files)[0];
     if (!file) return;
+    markProductEdited();
     setError("");
     try {
       const item = {
         id: crypto.randomUUID(),
-        dataUrl: await readImage(file),
+        dataUrl: await readImage(file, language),
         fileName: file.name,
       };
       setProductViews((current) => ({ ...current, [role]: item }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "图片读取失败。");
+      setError(e instanceof Error ? e.message : tx("图片读取失败。", "Failed to read the image."));
     }
   }
 
@@ -364,6 +460,7 @@ export default function EcommerceAssetsPage() {
   ) {
     const remaining = ECOMMERCE_CAROUSEL_ROLE_COUNTS[role] - refs[role].length;
     if (remaining <= 0) return;
+    markProductEdited();
     setError("");
     try {
       const next = await Promise.all(
@@ -371,7 +468,7 @@ export default function EcommerceAssetsPage() {
           .slice(0, remaining)
           .map(async (file) => ({
             id: crypto.randomUUID(),
-            dataUrl: await readImage(file),
+            dataUrl: await readImage(file, language),
             fileName: file.name,
           })),
       );
@@ -380,11 +477,12 @@ export default function EcommerceAssetsPage() {
         [role]: [...current[role], ...next],
       }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "图片读取失败。");
+      setError(e instanceof Error ? e.message : tx("图片读取失败。", "Failed to read the image."));
     }
   }
 
   function setPrimary(index: number) {
+    markProductEdited();
     setSkus((current) =>
       index > 0
         ? [
@@ -396,6 +494,7 @@ export default function EcommerceAssetsPage() {
     );
   }
   function removeSku(id: string) {
+    markProductEdited();
     setSkus((current) => current.filter((item) => item.id !== id));
   }
   function updateConfig<K extends keyof EcommerceGenerationConfig>(
@@ -403,6 +502,35 @@ export default function EcommerceAssetsPage() {
     value: EcommerceGenerationConfig[K],
   ) {
     setConfig((current) => ({ ...current, [key]: value }));
+  }
+  function getPricingConfig(): EcommercePricingConfig {
+    const defaults = CHUB_TWO_DEFAULT_GENERATION_CONFIG.pricing!;
+    return {
+      ...defaults,
+      ...(config.pricing ?? {}),
+      markets: {
+        ...defaults.markets,
+        ...(config.pricing?.markets ?? {}),
+      },
+    };
+  }
+  function updatePricingConfig(patch: Partial<EcommercePricingConfig>) {
+    setConfig((current) => ({
+      ...current,
+      pricing: { ...getPricingConfig(), ...patch },
+    }));
+  }
+  function updatePricingMarket(
+    country: "SG" | "MY",
+    patch: Partial<TikTokPricingMarketInput>,
+  ) {
+    const pricing = getPricingConfig();
+    updatePricingConfig({
+      markets: {
+        ...pricing.markets,
+        [country]: { ...pricing.markets[country], ...patch },
+      },
+    });
   }
   function assetPayload() {
     return {
@@ -430,7 +558,7 @@ export default function EcommerceAssetsPage() {
         setCopiedSkuId((current) => (current === slotId ? null : current));
       }, 1500);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "复制失败");
+      setError(e instanceof Error ? e.message : tx("复制失败", "Copy failed"));
     }
   }
 
@@ -442,7 +570,7 @@ export default function EcommerceAssetsPage() {
         setCopiedTitleId((current) => (current === id ? null : current));
       }, 1500);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "复制失败");
+      setError(e instanceof Error ? e.message : tx("复制失败", "Copy failed"));
     }
   }
 
@@ -480,6 +608,289 @@ export default function EcommerceAssetsPage() {
   function setStatus(key: OutputKey, status: OutputStatus) {
     setStatuses((current) => ({ ...current, [key]: status }));
   }
+
+  function inputFingerprint() {
+    return JSON.stringify({
+      skus: skus.map((item) => item.fileName),
+      views: PRODUCT_VIEW_KEYS.map((key) => productViews[key]?.fileName || ""),
+      refs: REF_ROLES.map((role) => refs[role].map((item) => item.fileName)),
+    });
+  }
+
+  function ensureHistorySession() {
+    const fingerprint = inputFingerprint();
+    if (
+      !currentHistoryId.current ||
+      (lastInputFingerprint.current !== "__history__" &&
+        lastInputFingerprint.current !== fingerprint)
+    ) {
+      currentHistoryId.current = crypto.randomUUID();
+      lastInputFingerprint.current = fingerprint;
+      productSessionVersion.current += 1;
+    }
+  }
+
+  function beginProductSession() {
+    productSessionVersion.current += 1;
+    return productSessionVersion.current;
+  }
+
+  function buildHistoryRecord(): EcommerceHistoryRecord | null {
+    const id = currentHistoryId.current;
+    if (!id) return null;
+    const snapshot: EcommerceHistoryRecord["snapshot"] = {
+      titles: titles.length ? titles : undefined,
+      brief: brief || undefined,
+      carouselJob: carouselJob || undefined,
+      storyboardJob: storyboardJob || undefined,
+      styleImageJob: styleJob || undefined,
+      pricingResults: pricingResults.length ? pricingResults : undefined,
+      priceRmb: priceRmb || undefined,
+      weightG: weightG || undefined,
+      pricingConfig: getPricingConfig(),
+    };
+    const outputKinds = OUTPUT_KEYS.filter((key) => {
+      if (key === "info") return Boolean(snapshot.titles?.length || snapshot.brief);
+      if (key === "carousel") return Boolean(snapshot.carouselJob);
+      if (key === "storyboard") return Boolean(snapshot.storyboardJob);
+      if (key === "pricing") return pricingResults.length > 0;
+      return Boolean(snapshot.styleImageJob);
+    });
+    if (!outputKinds.length) return null;
+    const titleName = titles[0]?.title
+      ?.replace(/^CHUB TWO｜\s*/i, "")
+      .split(/\s+for\s+/i)[0];
+    const productName =
+      storyboardJob?.storyPlan?.productName ||
+      titleName ||
+      styleJob?.skuIds?.[0] ||
+      "未命名商品";
+    const thumbnails = [
+      ...(carouselJob?.carouselImages.map((slot) => slot.resultUrl || "") || []),
+      storyboardJob?.cover?.resultUrl || "",
+      ...(storyboardJob?.slots.map((slot) => slot.resultUrl || "") || []),
+      ...(styleJob?.styleImages.map((slot) => slot.resultUrl || "") || []),
+    ].filter(Boolean).slice(0, 8);
+    const source = {
+      skuImageUrls:
+        styleJob?.productSkuImageUrls ||
+        carouselJob?.productSkuImageUrls ||
+        (storyboardJob ? [storyboardJob.productSkuImageUrl] : []),
+      productViewImageUrls: storyboardJob?.productViewImageUrls || [],
+      manufacturerReferenceImageUrls:
+        carouselJob?.manufacturerReferenceImageUrls || {
+          main: [],
+          scene: [],
+          detail: [],
+          variant: [],
+        },
+    };
+    const relevantStatuses = outputKinds.map((key) => statuses[key]);
+    const status = relevantStatuses.includes("processing")
+      ? "processing"
+      : relevantStatuses.includes("failed")
+        ? relevantStatuses.includes("completed")
+          ? "partial"
+          : "failed"
+        : "completed";
+    const now = Date.now();
+    const existing = historyRecords.find((record) => record.id === id);
+    return {
+      id,
+      productName,
+      skuIds: styleJob?.skuIds || [],
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      status,
+      outputKinds,
+      thumbnails,
+      source,
+      snapshot,
+    };
+  }
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      if (!historyHydrated.current || !currentHistoryId.current) return;
+      const record = buildHistoryRecord();
+      if (!record) return;
+      setHistoryRecords((current) => {
+        const next = [record, ...current.filter((item) => item.id !== record.id)]
+          .sort((a, b) => b.updatedAt - a.updatedAt)
+          .slice(0, ECOMMERCE_HISTORY_LIMIT);
+        saveEcommerceHistory(next);
+        return next;
+      });
+    });
+    // buildHistoryRecord intentionally reads the current generation snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titles, brief, carouselJob, storyboardJob, styleJob, pricingResults, priceRmb, weightG, config.pricing, statuses]);
+
+  function restoreHistoryRecord(record: EcommerceHistoryRecord) {
+    const sessionVersion = beginProductSession();
+    currentHistoryId.current = record.id;
+    lastInputFingerprint.current = "__history__";
+    setSkus(
+      record.source.skuImageUrls.map((url, index) => ({
+        id: `history-sku-${record.id}-${index}`,
+        dataUrl: url,
+        fileName: record.skuIds[index] || `SKU-${index + 1}`,
+      })),
+    );
+    setProductViews({
+      front: record.source.productViewImageUrls[0]
+        ? {
+            id: `history-view-${record.id}-front`,
+            dataUrl: record.source.productViewImageUrls[0],
+            fileName: "history-front.jpg",
+          }
+        : null,
+      side: record.source.productViewImageUrls[1]
+        ? {
+            id: `history-view-${record.id}-side`,
+            dataUrl: record.source.productViewImageUrls[1],
+            fileName: "history-side.jpg",
+          }
+        : null,
+      back: record.source.productViewImageUrls[2]
+        ? {
+            id: `history-view-${record.id}-back`,
+            dataUrl: record.source.productViewImageUrls[2],
+            fileName: "history-back.jpg",
+          }
+        : null,
+    });
+    setRefs(
+      (Object.keys(record.source.manufacturerReferenceImageUrls) as EcommerceCarouselRole[]).reduce(
+        (all, role) => ({
+          ...all,
+          [role]: record.source.manufacturerReferenceImageUrls[role].map(
+            (url, index) => ({
+              id: `history-ref-${record.id}-${role}-${index}`,
+              dataUrl: url,
+              fileName: `history-${role}-${index + 1}.jpg`,
+            }),
+          ),
+        }),
+        { main: [], scene: [], detail: [], variant: [] } as Record<
+          EcommerceCarouselRole,
+          UploadItem[]
+        >,
+      ),
+    );
+    setTitles(record.snapshot.titles || []);
+    if (record.snapshot.brief) applyBrief(record.snapshot.brief);
+    else {
+      setBrief("");
+      setBriefHtml("");
+    }
+    setCarouselJob(record.snapshot.carouselJob || null);
+    setStoryboardJob(record.snapshot.storyboardJob || null);
+    setStyleJob(record.snapshot.styleImageJob || null);
+    setPricingResults(record.snapshot.pricingResults || []);
+    setPriceRmb(record.snapshot.priceRmb || "");
+    setWeightG(record.snapshot.weightG || "");
+    if (record.snapshot.pricingConfig) {
+      setConfig((current) => ({
+        ...current,
+        pricing: record.snapshot.pricingConfig,
+      }));
+    }
+    const jobStatus = (
+      status: "preparing" | "processing" | "completed" | "failed" | undefined,
+    ): OutputStatus =>
+      status === "processing" || status === "preparing"
+        ? "processing"
+        : status === "failed"
+          ? "failed"
+          : "completed";
+    setStatuses({
+      info: record.outputKinds.includes("info") ? "completed" : "idle",
+      carousel: record.snapshot.carouselJob
+        ? jobStatus(record.snapshot.carouselJob.status)
+        : "idle",
+      storyboard: record.snapshot.storyboardJob
+        ? jobStatus(record.snapshot.storyboardJob.status)
+        : "idle",
+      style: record.snapshot.styleImageJob
+        ? jobStatus(record.snapshot.styleImageJob.status)
+        : "idle",
+      pricing: record.snapshot.pricingResults?.length ? "completed" : "idle",
+    });
+    setHistoryOpen(false);
+    const pollVersion = beginStoryboardPolling();
+    if (record.snapshot.carouselJob?.status === "processing")
+      void pollCarousel(record.snapshot.carouselJob);
+    if (record.snapshot.storyboardJob?.status === "processing")
+      void pollStoryboards(record.snapshot.storyboardJob, pollVersion);
+    if (
+      record.snapshot.storyboardJob?.slots.some(
+        (slot) => slot.video?.status === "processing",
+      )
+    )
+      void pollStoryboardVideos(record.snapshot.storyboardJob, sessionVersion);
+    if (record.snapshot.styleImageJob?.status === "processing")
+      void pollStyle(record.snapshot.styleImageJob);
+  }
+
+  function startNewProduct() {
+    if (carouselTimer.current) clearTimeout(carouselTimer.current);
+    if (styleTimer.current) clearTimeout(styleTimer.current);
+    if (storyboardTimer.current) clearTimeout(storyboardTimer.current);
+    if (storyboardVideoTimer.current) clearTimeout(storyboardVideoTimer.current);
+    beginStoryboardPolling();
+    beginProductSession();
+    currentHistoryId.current = null;
+    lastInputFingerprint.current = null;
+    setError("");
+    setSkus([]);
+    setProductViews({ front: null, side: null, back: null });
+    setRefs({ main: [], scene: [], detail: [], variant: [] });
+    setPriceRmb("");
+    setWeightG("");
+    setTitles([]);
+    setBrief("");
+    setBriefHtml("");
+    setCarouselJob(null);
+    setStoryboardJob(null);
+    setStyleJob(null);
+    setPricingResults([]);
+    setStatuses({
+      info: "idle",
+      carousel: "idle",
+      storyboard: "idle",
+      style: "idle",
+      pricing: "idle",
+    });
+    setCopiedSkuId(null);
+    setCopiedTitleId(null);
+    setBriefCopied(false);
+    setCopiedStoryboardId(null);
+    setCopiedStoryboardTitle(false);
+    setCopiedStoryboardDescription(false);
+    setEditingCarousel(null);
+    setEditingStyle(null);
+    setHistoryOpen(false);
+  }
+
+  function deleteHistoryRecord(id: string) {
+    setHistoryRecords((current) => {
+      const next = current.filter((record) => record.id !== id);
+      saveEcommerceHistory(next);
+      return next;
+    });
+    if (currentHistoryId.current === id) currentHistoryId.current = null;
+  }
+
+  const visibleHistoryRecords = historyRecords.filter((record) => {
+    const query = historyQuery.trim().toLowerCase();
+    return (
+      !query ||
+      record.productName.toLowerCase().includes(query) ||
+      record.skuIds.some((skuId) => skuId.toLowerCase().includes(query))
+    );
+  });
+  const pricingConfig = getPricingConfig();
 
   async function generateInfo() {
     setStatus("info", "processing");
@@ -611,6 +1022,44 @@ export default function EcommerceAssetsPage() {
     }
   }
 
+  async function generatePricing() {
+    const cost = Number(priceRmb);
+    const weight = Number(weightG);
+    if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(weight) || weight <= 0) {
+      setError(tx("请输入有效的商品成本和重量。", "Enter a valid product cost and weight."));
+      setStatus("pricing", "failed");
+      return;
+    }
+    setStatus("pricing", "processing");
+    try {
+      const pricing = config.pricing ?? CHUB_TWO_DEFAULT_GENERATION_CONFIG.pricing!;
+      const results = await Promise.all(pricing.countries.map(async (country) => {
+        const market = pricing.markets[country];
+        const response = await fetch("/api/ecommerce-assets/pricing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            productCostRmb: cost,
+            packagingCostRmb: pricing.packagingCostRmb,
+            weightG: weight,
+            buyerPayPercent: pricing.buyerPayPercent,
+            targetMarginPercent: pricing.targetMarginPercent,
+            affiliateRate: pricing.affiliateRate,
+            market: market ?? defaultTikTokPricingMarket(country),
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || tx("价格推荐失败。", "Price recommendation failed."));
+        return { country, calculation: result.calculation, ai: result.ai ?? null, aiError: result.aiError } as EcommercePricingResult;
+      }));
+      setPricingResults(results);
+      setStatus("pricing", "completed");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tx("价格推荐失败。", "Price recommendation failed."));
+      setStatus("pricing", "failed");
+    }
+  }
+
   async function pollStyle(current: EcommerceStyleImageJob) {
     try {
       const response = await fetch(
@@ -637,60 +1086,37 @@ export default function EcommerceAssetsPage() {
     }
   }
 
-  async function downloadCarouselZip() {
-    if (!carouselJob) return;
+  async function downloadAssetFolder() {
+    if (!carouselJob && !styleJob) return;
     try {
-      const response = await fetch("/api/ecommerce-assets/zip", {
+      const response = await fetch("/api/ecommerce-assets/assets/zip", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job: carouselJob }),
+        body: JSON.stringify({ carouselJob, styleJob }),
       });
       if (!response.ok) {
         const result = await response.json().catch(() => ({}));
-        throw new Error(result.error || "ZIP 导出失败。");
+        throw new Error(result.error || tx("图片素材导出失败。", "Image asset export failed."));
       }
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = url;
-      link.download = `chub-two-carousel-${carouselJob.id}.zip`;
+      link.download = `tiktok-shop-image-assets-${carouselJob?.id || styleJob?.id}.zip`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "ZIP 导出失败。");
-    }
-  }
-
-  async function downloadStyleZip() {
-    if (!styleJob) return;
-    try {
-      const response = await fetch("/api/ecommerce-assets/style-images/zip", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job: styleJob }),
-      });
-      if (!response.ok) {
-        const result = await response.json().catch(() => ({}));
-        throw new Error(result.error || "ZIP 导出失败。");
-      }
-      const url = URL.createObjectURL(await response.blob());
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `chub-two-style-images-${styleJob.id}.zip`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "ZIP 导出失败。");
+      setError(e instanceof Error ? e.message : tx("图片素材导出失败。", "Image asset export failed."));
     }
   }
 
   async function generateStoryboards() {
-    const primaryProductDataUrl = skus[0]?.dataUrl || productViews.front?.dataUrl;
+    const primaryProductDataUrl = skus[0]?.dataUrl;
     if (!primaryProductDataUrl) {
       setError(copy.needFrontView);
       setStatus("storyboard", "failed");
       return;
     }
-    if (!productViews.front) {
+    if (!skus[0]) {
       setError(copy.needFrontView);
       setStatus("storyboard", "failed");
       return;
@@ -700,6 +1126,8 @@ export default function EcommerceAssetsPage() {
       setStatus("storyboard", "failed");
       return;
     }
+    const sessionVersion = productSessionVersion.current;
+    const pollVersion = beginStoryboardPolling();
     setStatus("storyboard", "processing");
     try {
       const response = await fetch("/api/ecommerce-assets/storyboards/create", {
@@ -707,9 +1135,9 @@ export default function EcommerceAssetsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           productSkuDataUrl: primaryProductDataUrl,
-          productViewDataUrls: PRODUCT_VIEW_KEYS.map(
-            (role) => productViews[role]?.dataUrl,
-          ).filter((url): url is string => Boolean(url)),
+          productViewDataUrls: [primaryProductDataUrl, productViews.side?.dataUrl, productViews.back?.dataUrl].filter(
+            (url): url is string => Boolean(url),
+          ),
           manufacturerReferenceDataUrls: [
             ...refs.scene.map((item) => item.dataUrl),
             ...refs.detail.map((item) => item.dataUrl),
@@ -719,15 +1147,26 @@ export default function EcommerceAssetsPage() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
+      if (sessionVersion !== productSessionVersion.current) return;
       setStoryboardJob(result.job);
-      void pollStoryboards(result.job);
+      void pollStoryboards(result.job, pollVersion);
     } catch (e) {
       setError(e instanceof Error ? e.message : copy.failed);
       setStatus("storyboard", "failed");
     }
   }
 
-  async function pollStoryboards(current: EcommerceStoryboardJob) {
+  function beginStoryboardPolling() {
+    if (storyboardTimer.current) clearTimeout(storyboardTimer.current);
+    storyboardPollVersion.current += 1;
+    return storyboardPollVersion.current;
+  }
+
+  async function pollStoryboards(
+    current: EcommerceStoryboardJob,
+    pollVersion = storyboardPollVersion.current,
+  ) {
+    if (pollVersion !== storyboardPollVersion.current) return;
     try {
       const response = await fetch("/api/ecommerce-assets/storyboards/status", {
         method: "POST",
@@ -736,10 +1175,11 @@ export default function EcommerceAssetsPage() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
+      if (pollVersion !== storyboardPollVersion.current) return;
       setStoryboardJob(result.job);
       if (result.job.status === "processing") {
         storyboardTimer.current = setTimeout(
-          () => void pollStoryboards(result.job),
+          () => void pollStoryboards(result.job, pollVersion),
           4000,
         );
       } else {
@@ -749,6 +1189,7 @@ export default function EcommerceAssetsPage() {
         );
       }
     } catch (e) {
+      if (pollVersion !== storyboardPollVersion.current) return;
       setError(e instanceof Error ? e.message : copy.failed);
       setStatus("storyboard", "failed");
     }
@@ -758,11 +1199,11 @@ export default function EcommerceAssetsPage() {
     if (!slot.resultUrl) return;
     try {
       const blob = await fetch(slot.resultUrl).then((response) => {
-        if (!response.ok) throw new Error("分镜图读取失败。");
+        if (!response.ok) throw new Error(tx("分镜图读取失败。", "Failed to load the storyboard image."));
         return response.blob();
       });
       if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined")
-        throw new Error("当前浏览器不支持直接复制图片，已开始下载。");
+        throw new Error(tx("当前浏览器不支持直接复制图片，已开始下载。", "This browser cannot copy images directly; the image download has started."));
       await navigator.clipboard.write([
         new ClipboardItem({ [blob.type || "image/png"]: blob }),
       ]);
@@ -781,7 +1222,7 @@ export default function EcommerceAssetsPage() {
         link.download = `${slot.id}.png`;
         link.click();
       }
-      setError(e instanceof Error ? e.message : "分镜图复制失败，已开始下载。");
+      setError(e instanceof Error ? e.message : tx("分镜图复制失败，已开始下载。", "Failed to copy the storyboard image; the download has started."));
     }
   }
 
@@ -812,6 +1253,8 @@ export default function EcommerceAssetsPage() {
 
   async function regenerateStoryboardMetadata() {
     if (!storyboardJob || regeneratingStoryboardMetadata) return;
+    const sessionVersion = productSessionVersion.current;
+    const pollVersion = beginStoryboardPolling();
     setError("");
     setRegeneratingStoryboardMetadata(true);
     try {
@@ -825,8 +1268,9 @@ export default function EcommerceAssetsPage() {
       );
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
+      if (sessionVersion !== productSessionVersion.current) return;
       setStoryboardJob(result.job);
-      void pollStoryboards(result.job);
+      void pollStoryboards(result.job, pollVersion);
     } catch (e) {
       setError(e instanceof Error ? e.message : copy.failed);
     } finally {
@@ -836,6 +1280,8 @@ export default function EcommerceAssetsPage() {
 
   async function regenerateStoryboardCover() {
     if (!storyboardJob) return;
+    const sessionVersion = productSessionVersion.current;
+    const pollVersion = beginStoryboardPolling();
     setError("");
     try {
       const response = await fetch(
@@ -848,8 +1294,9 @@ export default function EcommerceAssetsPage() {
       );
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
+      if (sessionVersion !== productSessionVersion.current) return;
       setStoryboardJob(result.job);
-      void pollStoryboards(result.job);
+      void pollStoryboards(result.job, pollVersion);
     } catch (e) {
       setError(e instanceof Error ? e.message : copy.failed);
     }
@@ -857,6 +1304,7 @@ export default function EcommerceAssetsPage() {
 
   async function createStoryboardVideo(slotId: string) {
     if (!storyboardJob || creatingStoryboardVideoId === slotId) return;
+    const sessionVersion = productSessionVersion.current;
     const currentJob = storyboardJob;
     setCreatingStoryboardVideoId(slotId);
     setError("");
@@ -870,6 +1318,8 @@ export default function EcommerceAssetsPage() {
                     ...slot,
                     video: {
                       taskId: `pending-${slotId}`,
+                      provider: "seedance-2-mini",
+                      model: "bytedance/seedance-2-mini",
                       status: "processing" as const,
                       prompt: "",
                     },
@@ -890,6 +1340,7 @@ export default function EcommerceAssetsPage() {
       );
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
+      if (sessionVersion !== productSessionVersion.current) return;
       const mergedJob: EcommerceStoryboardJob = {
         ...result.job,
         slots: result.job.slots.map((slot: EcommerceStoryboardSlot) => {
@@ -915,8 +1366,9 @@ export default function EcommerceAssetsPage() {
           }),
         };
       });
-      void pollStoryboardVideos(mergedJob);
+      void pollStoryboardVideos(mergedJob, sessionVersion);
     } catch (e) {
+      if (sessionVersion !== productSessionVersion.current) return;
       const message = e instanceof Error ? e.message : copy.failed;
       setStoryboardJob((current) =>
         current
@@ -928,6 +1380,8 @@ export default function EcommerceAssetsPage() {
                       ...slot,
                       video: {
                         taskId: `failed-${slotId}`,
+                        provider: "seedance-2-mini",
+                        model: "bytedance/seedance-2-mini",
                         status: "fail" as const,
                         prompt: "",
                         error: message,
@@ -946,7 +1400,11 @@ export default function EcommerceAssetsPage() {
     }
   }
 
-  async function pollStoryboardVideos(current: EcommerceStoryboardJob) {
+  async function pollStoryboardVideos(
+    current: EcommerceStoryboardJob,
+    sessionVersion = productSessionVersion.current,
+  ) {
+    if (sessionVersion !== productSessionVersion.current) return;
     if (!current.slots.some((slot) => slot.video?.status === "processing"))
       return;
     try {
@@ -960,6 +1418,7 @@ export default function EcommerceAssetsPage() {
       );
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
+      if (sessionVersion !== productSessionVersion.current) return;
       setStoryboardJob(result.job);
       if (
         result.job.slots.some(
@@ -968,16 +1427,19 @@ export default function EcommerceAssetsPage() {
         )
       )
         storyboardVideoTimer.current = setTimeout(
-          () => void pollStoryboardVideos(result.job),
+          () => void pollStoryboardVideos(result.job, sessionVersion),
           5000,
         );
     } catch (e) {
+      if (sessionVersion !== productSessionVersion.current) return;
       setError(e instanceof Error ? e.message : copy.failed);
     }
   }
 
   async function regenerateStoryboard(slotId: string) {
     if (!storyboardJob) return;
+    const sessionVersion = productSessionVersion.current;
+    const pollVersion = beginStoryboardPolling();
     try {
       const response = await fetch(
         "/api/ecommerce-assets/storyboards/regenerate",
@@ -989,6 +1451,7 @@ export default function EcommerceAssetsPage() {
       );
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
+      if (sessionVersion !== productSessionVersion.current) return;
       const updated = {
         ...storyboardJob,
         status: "processing" as const,
@@ -1008,7 +1471,7 @@ export default function EcommerceAssetsPage() {
       };
       setStoryboardJob(updated);
       setStatus("storyboard", "processing");
-      void pollStoryboards(updated);
+      void pollStoryboards(updated, pollVersion);
     } catch (e) {
       setError(e instanceof Error ? e.message : copy.failed);
     }
@@ -1025,10 +1488,13 @@ export default function EcommerceAssetsPage() {
       !selected.storyboard
     )
       return setError(copy.needSku);
-    if (selected.storyboard && !productViews.front)
+    if (selected.storyboard && !skus[0])
       return setError(copy.needFrontView);
     if (selected.storyboard && !hasManufacturerReferences())
       return setError(copy.needManufacturerReference);
+    if (selected.pricing && (!priceRmb || !weightG))
+      return setError(tx("请在价格配置中填写商品成本和重量。", "Enter product cost and weight in the pricing inputs."));
+    ensureHistorySession();
     const runCarousel = selected.carousel && skus.length > 0;
     const runStyle = selected.style && skus.length > 0;
     if (!skus.length && selected.storyboard) {
@@ -1045,6 +1511,7 @@ export default function EcommerceAssetsPage() {
       runCarousel ? generateCarousel() : Promise.resolve(),
       selected.storyboard ? generateStoryboards() : Promise.resolve(),
       runStyle ? generateStyle() : Promise.resolve(),
+      selected.pricing ? generatePricing() : Promise.resolve(),
     ]);
     setSaving(false);
   }
@@ -1170,27 +1637,61 @@ export default function EcommerceAssetsPage() {
             href="/"
             className="text-sm font-semibold text-zinc-300 hover:text-white"
           >
-            ← 返回首页
+            ← {tx("返回首页", "Back to Home")}
           </Link>
-          <button
-            type="button"
-            onClick={() => setConfigOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-lime-300/30 px-3 py-2 text-xs font-semibold text-lime-200 hover:bg-lime-300/10"
-          >
-            <Settings2 size={15} />
-            生成配置
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-zinc-300 hover:border-lime-300/30 hover:text-lime-200"
+            >
+              <History size={15} />
+              {tx("历史记录", "History")}
+              {historyRecords.length ? (
+                <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">
+                  {historyRecords.length}
+                </span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              onClick={startNewProduct}
+              aria-label={tx("新建商品", "New Product")}
+              title={tx("新建商品", "New Product")}
+              className="inline-flex items-center justify-center rounded-lg border border-white/10 p-2 text-zinc-300 hover:border-lime-300/30 hover:text-lime-200"
+            >
+              <Plus size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfigOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-lime-300/30 px-3 py-2 text-xs font-semibold text-lime-200 hover:bg-lime-300/10"
+            >
+              <Settings2 size={15} />
+              {copy.config}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPricingConfigOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-lime-300/30 px-3 py-2 text-xs font-semibold text-lime-200 hover:bg-lime-300/10"
+            >
+              <Calculator size={15} />
+              {tx("价格配置", "Pricing Settings")}
+            </button>
+          </div>
         </div>
         <header className="mb-8">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-lime-300/20 bg-lime-300/10 px-3 py-1 text-xs font-semibold text-lime-200">
-            <Sparkles size={13} /> CHUB TWO visual workstation
+            <Sparkles size={13} /> TikTok Shop {tx("上品神器", "Listing Wizard")}
           </div>
           <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
             {copy.title}
           </h1>
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-500">
-            {copy.subtitle}
-          </p>
+          {copy.subtitle ? (
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-500">
+              {copy.subtitle}
+            </p>
+          ) : null}
         </header>
         {error ? (
           <div className="mb-5 flex justify-between rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
@@ -1201,10 +1702,39 @@ export default function EcommerceAssetsPage() {
           </div>
         ) : null}
         <div className="space-y-5">
-          <Panel title={copy.sku} subtitle={copy.skuHint}>
+          <Panel
+            title={tx("定价输入", "Pricing Inputs")}
+            icon={<Calculator size={17} />}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-xs text-zinc-400">
+                {tx("商品成本（人民币）", "Product Cost (RMB)")}
+                <input
+                  type="number"
+                  min="0"
+                  value={priceRmb}
+                  onChange={(event) => setPriceRmb(event.target.value)}
+                  placeholder={tx("例如 20", "e.g. 20")}
+                  className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus:border-lime-300/60"
+                />
+              </label>
+              <label className="text-xs text-zinc-400">
+                {tx("包裹重量（克）", "Package Weight (g)")}
+                <input
+                  type="number"
+                  min="1"
+                  value={weightG}
+                  onChange={(event) => setWeightG(event.target.value)}
+                  placeholder={tx("例如 392", "e.g. 392")}
+                  className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus:border-lime-300/60"
+                />
+              </label>
+            </div>
+          </Panel>
+          <Panel title={copy.sku} icon={<Package size={17} />}>
             <label className="mb-4 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-lime-300/30 bg-lime-300/5 px-4 py-4 text-sm font-semibold text-lime-200 hover:bg-lime-300/10">
               <Plus size={17} />
-              上传多个 SKU 图片
+              {tx("上传多个 SKU 图片", "Upload SKU Images")}
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
@@ -1257,12 +1787,12 @@ export default function EcommerceAssetsPage() {
             </div>
           </Panel>
           <Panel
-            title="产品 3 视图"
-            subtitle="正面视图用于锁定产品外观；侧面和背面可选，用于视频分镜中保持结构、材质和细节一致。"
+            title={tx("产品 3 视图", "Product 3-View Images")}
+            icon={<Camera size={17} />}
           >
             <div className="grid gap-3 sm:grid-cols-3">
               {PRODUCT_VIEW_KEYS.map((role) => {
-                const item = productViews[role];
+                const item = role === "front" ? skus[0] : productViews[role];
                 return (
                   <div
                     key={role}
@@ -1272,43 +1802,53 @@ export default function EcommerceAssetsPage() {
                       <div className="relative">
                         <img
                           src={item.dataUrl}
-                          alt={`${PRODUCT_VIEW_LABELS[role]}视图`}
+                          alt={`${productViewLabel(role, language)} ${language === "en" ? "View" : "视图"}`}
                           className="aspect-square w-full object-contain"
                         />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setProductViews((current) => ({
-                              ...current,
-                              [role]: null,
-                            }))
-                          }
-                          className="absolute right-2 top-2 rounded-full bg-black/75 p-1.5 text-white"
-                        >
-                          <X size={13} />
-                        </button>
+                        {role !== "front" ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setProductViews((current) => ({
+                                ...current,
+                                [role]: null,
+                              }))
+                            }
+                            className="absolute right-2 top-2 rounded-full bg-black/75 p-1.5 text-white"
+                          >
+                            <X size={13} />
+                          </button>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="flex aspect-square items-center justify-center text-xs text-zinc-600">
-                        暂未上传
+                        {tx("暂未上传", "Not uploaded")}
                       </div>
                     )}
-                    <label className="flex cursor-pointer items-center justify-between border-t border-white/10 px-3 py-2 text-xs font-semibold text-zinc-300 hover:text-lime-200">
+                    <label className={`flex items-center justify-between border-t border-white/10 px-3 py-2 text-xs font-semibold ${role === "front" ? "text-lime-200" : "cursor-pointer text-zinc-300 hover:text-lime-200"}`}>
                       <span>
-                        {PRODUCT_VIEW_LABELS[role]}
-                        {role === "front" ? "（必填）" : "（可选）"}
+                        {productViewLabel(role, language)}
+                        {role === "front"
+                          ? language === "en"
+                            ? " (Uses SKU 1 main image)"
+                            : "（自动使用 SKU 1 主图）"
+                          : language === "en"
+                            ? " (Optional)"
+                            : "（可选）"}
                       </span>
-                      <span>{item ? "替换" : "上传"}</span>
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        className="sr-only"
-                        onChange={(event) => {
-                          if (event.target.files)
-                            void addProductViewFile(role, event.target.files);
-                          event.currentTarget.value = "";
-                        }}
-                      />
+                      {role !== "front" ? <>
+                        <span>{item ? (language === "en" ? "Replace" : "替换") : language === "en" ? "Upload" : "上传"}</span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="sr-only"
+                          onChange={(event) => {
+                            if (event.target.files)
+                              void addProductViewFile(role, event.target.files);
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                      </> : <span>{language === "en" ? "Updates with SKU 1" : "随 SKU 1 更新"}</span>}
                     </label>
                     {item ? (
                       <div className="truncate px-3 pb-2 text-[11px] text-zinc-500">
@@ -1320,14 +1860,14 @@ export default function EcommerceAssetsPage() {
               })}
             </div>
           </Panel>
-          <Panel title={copy.refs} subtitle={copy.refsHint}>
+          <Panel title={copy.refs} icon={<Images size={17} />}>
             <div className="space-y-5">
               {REF_ROLES.map((role) => (
                 <div key={role}>
                   <div className="mb-2 flex items-center justify-between">
                     <div>
                       <h3 className="text-sm font-semibold text-zinc-200">
-                        {roleLabel(role)}
+                        {roleLabel(role, language)}
                       </h3>
                       <p className="text-xs text-zinc-500">
                         {refs[role].length}/
@@ -1367,14 +1907,15 @@ export default function EcommerceAssetsPage() {
                         />
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={() => {
+                            markProductEdited();
                             setRefs((current) => ({
                               ...current,
                               [role]: current[role].filter(
                                 (candidate) => candidate.id !== item.id,
                               ),
-                            }))
-                          }
+                            }));
+                          }}
                           className="absolute right-2 top-2 rounded-full bg-black/75 p-1.5 text-white"
                         >
                           <X size={13} />
@@ -1391,10 +1932,10 @@ export default function EcommerceAssetsPage() {
           </Panel>
           <Panel
             title={copy.workstation}
-            subtitle="勾选后一次生成；三个任务并行执行，已经完成的结果会保留。"
+            icon={<Sparkles size={17} />}
           >
             <div className="grid gap-3 md:grid-cols-4">
-              {(["info", "carousel", "storyboard", "style"] as OutputKey[]).map(
+              {(["info", "carousel", "storyboard", "pricing"] as OutputKey[]).map(
                 (key) => (
                   <label
                     key={key}
@@ -1404,26 +1945,29 @@ export default function EcommerceAssetsPage() {
                       type="checkbox"
                       checked={selected[key]}
                       onChange={(event) =>
-                        setSelected((current) => ({
-                          ...current,
-                          [key]: event.target.checked,
-                        }))
+                        setSelected((current) =>
+                          key === "carousel"
+                            ? { ...current, carousel: event.target.checked, style: event.target.checked }
+                            : { ...current, [key]: event.target.checked },
+                        )
                       }
                       className="mt-1 accent-lime-300"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center justify-between gap-2 text-sm font-semibold text-white">
                         {copy[key]}
-                        <Status status={statuses[key]} />
+                        <Status status={statuses[key]} language={language} />
                       </span>
                       <span className="mt-2 block text-xs leading-5 text-zinc-500">
                         {key === "info"
-                          ? "AI 分析厂家文案并生成英文标题和 QA 简述。"
+                          ? tx("AI 分析厂家文案并生成英文标题和 QA 简述。", "Analyze manufacturer copy and generate an English title and QA description.")
                           : key === "carousel"
-                            ? "自动确定每张轮播图的英文标题与副标题。"
+                            ? tx("一次生成 TikTok Shop 轮播图和全部 SKU 款式图，并统一导出。", "Generate TikTok Shop carousel images and all SKU style images together, then export them as one package.")
                             : key === "storyboard"
-                              ? "生成 3 张统一格式的英文产品分镜图，并可分别生成视频。"
-                              : "每个 SKU 生成一张统一 45° 俯拍白底款式图。"}
+                              ? tx("生成 3 张统一格式的视频素材图，并可分别生成视频。", "Generate three consistent video asset images and create a video for each one.")
+                              : key === "style"
+                                ? tx("轮播图之外，为每个 SKU 生成一张统一 45° 俯拍白底款式图。", "Generate one consistent 45° top-down white-background style image for each SKU.")
+                                : tx("根据价格和重量，生成新加坡/马来西亚的公式价格与 AI 推荐价格。", "Generate formula prices and AI recommendations for Singapore and Malaysia from cost and weight.")}
                       </span>
                     </span>
                   </label>
@@ -1435,12 +1979,7 @@ export default function EcommerceAssetsPage() {
               onClick={() => void generateSelected()}
               disabled={
                 saving ||
-                (!skus.length &&
-                  !(
-                    (selected.info || selected.storyboard) &&
-                    hasManufacturerReferences() &&
-                    (!selected.storyboard || Boolean(productViews.front))
-                  ))
+                !Object.values(selected).some(Boolean)
               }
               className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-lime-300 text-sm font-semibold text-zinc-950 hover:bg-lime-200 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
             >
@@ -1455,8 +1994,8 @@ export default function EcommerceAssetsPage() {
               {titles.length || brief ? (
                 <section className="rounded-lg border border-white/10 bg-black/20 p-4">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">商品标题与简述</h3>
-                    <Status status={statuses.info} />
+                    <h3 className="text-sm font-semibold">{tx("商品标题与简述", "Product Title & Description")}</h3>
+                    <Status status={statuses.info} language={language} />
                   </div>
                   <div className="space-y-3">
                     {titles.map((title, index) => (
@@ -1477,6 +2016,8 @@ export default function EcommerceAssetsPage() {
                         <button
                           type="button"
                           onClick={() => void copyTitle(title.id, title.title)}
+                          aria-label={copiedTitleId === title.id ? tx("已复制商品标题", "Title copied") : tx("复制商品标题", "Copy title")}
+                          title={copiedTitleId === title.id ? tx("已复制商品标题", "Title copied") : tx("复制商品标题", "Copy title")}
                           className="flex items-center gap-1.5 rounded-md border border-white/10 px-3 text-xs text-zinc-300 transition-colors duration-200 hover:text-lime-200"
                         >
                           {copiedTitleId === title.id ? (
@@ -1489,13 +2030,15 @@ export default function EcommerceAssetsPage() {
                     ))}
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-zinc-400">
-                        商品简述
+                        {tx("商品简述", "Product Description")}
                       </span>
                       <span className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => void regenerateBrief()}
                           disabled={briefLoading || saving}
+                          aria-label={tx("重新生成商品简述", "Regenerate product description")}
+                          title={tx("重新生成商品简述", "Regenerate product description")}
                           className="inline-flex items-center gap-1 rounded-md border border-lime-300/30 px-3 py-2 text-xs text-lime-200 hover:bg-lime-300/10 disabled:opacity-50"
                         >
                           {briefLoading ? (
@@ -1503,23 +2046,18 @@ export default function EcommerceAssetsPage() {
                           ) : (
                             <RefreshCw size={13} />
                           )}
-                          重新生成
                         </button>
                         <button
                           type="button"
                           onClick={() => void copyBrief()}
+                          aria-label={briefCopied ? tx("已复制商品简述", "Description copied") : tx("复制商品简述", "Copy description")}
+                          title={briefCopied ? tx("已复制商品简述", "Description copied") : tx("复制商品简述", "Copy description")}
                           className="inline-flex items-center gap-1 rounded-md border border-white/10 px-3 py-2 text-xs text-zinc-300 transition-colors duration-200 hover:text-lime-200"
                         >
                           {briefCopied ? (
-                            <>
-                              <Check size={13} className="text-lime-200" />
-                              已复制
-                            </>
+                            <Check size={13} className="text-lime-200" />
                           ) : (
-                            <>
-                              <CopyIcon size={13} />
-                              复制
-                            </>
+                            <CopyIcon size={13} />
                           )}
                         </button>
                       </span>
@@ -1529,7 +2067,7 @@ export default function EcommerceAssetsPage() {
                       contentEditable
                       suppressContentEditableWarning
                       role="textbox"
-                      aria-label="商品简述富文本编辑器"
+                      aria-label={tx("商品简述富文本编辑器", "Product description rich text editor")}
                       onBlur={(event) => {
                         setBriefHtml(event.currentTarget.innerHTML);
                         setBrief(
@@ -1542,28 +2080,63 @@ export default function EcommerceAssetsPage() {
                   </div>
                 </section>
               ) : null}
-              {carouselJob ? (
+              {pricingResults.length ? (
+                <section className="rounded-lg border border-white/10 bg-black/20 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold">{copy.pricing}</h3>
+                      <p className="mt-1 text-xs text-zinc-500">{tx(`基于商品成本 ${priceRmb} 元、重量 ${weightG} 克；可在价格配置中调整国家和计算参数。`, `Based on product cost ${priceRmb} RMB and weight ${weightG} g. Countries and pricing parameters can be adjusted in Pricing Settings.`)}</p>
+                    </div>
+                    <Status status={statuses.pricing} language={language} />
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {pricingResults.map((item) => {
+                      const result = item.calculation.results[0];
+                      return (
+                        <article key={item.country} className="rounded-lg border border-white/10 p-3">
+                          <div className="flex items-center justify-between text-sm font-semibold text-white">
+                            <span>{item.country === "SG" ? tx("新加坡 · SGD", "Singapore · SGD") : tx("马来西亚 · MYR", "Malaysia · MYR")}</span>
+                            <span className="font-mono text-lime-200">{result.suggestedPrice.toFixed(2)}</span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-zinc-400">
+                            <span>{tx("保本", "Break-even")}<br /><b className="text-zinc-200">{result.breakEvenPrice.toFixed(2)}</b></span>
+                            <span>{tx("稳妥", "Stable")}<br /><b className="text-zinc-200">{result.stablePrice.toFixed(2)}</b></span>
+                            <span>{tx("折后", "After Discount")}<br /><b className="text-zinc-200">{result.discountedPrice.toFixed(2)}</b></span>
+                          </div>
+                          {item.ai?.recommendation ? <p className="mt-3 text-xs leading-5 text-zinc-400">{item.ai.recommendation}</p> : null}
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
+              {carouselJob || styleJob ? (
                 <section className="rounded-lg border border-white/10 bg-black/20 p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="text-sm font-semibold">
-                      TikTok Shop 轮播图
+                      图片素材区域
                     </h3>
                     <div className="flex items-center gap-3">
-                      <Status status={statuses.carousel} />
-                      {carouselJob.status === "completed" ? (
+                      {carouselJob ? <Status status={statuses.carousel} language={language} /> : null}
+                      {styleJob ? <Status status={statuses.style} language={language} /> : null}
+                      {(carouselJob?.status === "completed" || styleJob?.status === "completed") ? (
                         <button
                           type="button"
-                          onClick={() => void downloadCarouselZip()}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-lime-300/30 px-3 py-1.5 text-xs font-semibold text-lime-200 hover:bg-lime-300/10"
+                          onClick={() => void downloadAssetFolder()}
+                          aria-label={tx("下载图片素材 ZIP", "Download Image Assets ZIP")}
+                          title={tx("下载图片素材 ZIP", "Download Image Assets ZIP")}
+                          className="inline-flex items-center justify-center rounded-md border border-lime-300/30 p-1.5 text-lime-200 hover:bg-lime-300/10"
                         >
                           <Download size={13} />
-                          下载 ZIP
                         </button>
                       ) : null}
                     </div>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {carouselJob.carouselImages.map((slot) => (
+                  {carouselJob ? (
+                    <div>
+                      <h4 className="mb-3 text-xs font-semibold text-zinc-300">{tx("TikTok Shop 轮播图", "TikTok Shop Carousel Images")}</h4>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {carouselJob.carouselImages.map((slot) => (
                       <article
                         key={slot.id}
                         className="relative rounded-lg border border-white/10"
@@ -1572,7 +2145,7 @@ export default function EcommerceAssetsPage() {
                           <span className="truncate text-xs font-semibold">
                             {slot.title}
                           </span>
-                          <ImageStatus status={slot.status} />
+                          <ImageStatus status={slot.status} language={language} />
                         </div>
                         {slot.resultUrl ? (
                           <img
@@ -1591,7 +2164,7 @@ export default function EcommerceAssetsPage() {
                         )}
                         <div className="flex items-center justify-between gap-2 p-3 text-[11px] text-zinc-500">
                           <span className="truncate">
-                            {slot.selectedCopy?.title || "AI 自动文案"}
+                            {slot.selectedCopy?.title || tx("AI 自动文案", "AI-generated copy")}
                           </span>
                           <span className="flex items-center gap-3">
                             {slot.resultUrl ? (
@@ -1600,43 +2173,151 @@ export default function EcommerceAssetsPage() {
                                 target="_blank"
                                 rel="noreferrer"
                                 download
-                                className="text-zinc-300"
+                                aria-label={`下载 ${slot.title}`}
+                                title={`下载 ${slot.title}`}
+                                className="text-zinc-300 hover:text-lime-200"
                               >
-                                {copy.download}
+                                <Download size={13} />
                               </a>
                             ) : null}
                             <button
                               type="button"
                               onClick={() => openCarouselRegenerate(slot)}
-                              className="text-lime-200"
+                              aria-label={`重新生成 ${slot.title}`}
+                              title={`重新生成 ${slot.title}`}
+                              className="text-lime-200 hover:text-white"
                             >
                               <RefreshCw size={13} />
                             </button>
                           </span>
                         </div>
                       </article>
-                    ))}
-                  </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {styleJob ? (
+                    <div className={carouselJob ? "mt-6 border-t border-white/10 pt-6" : ""}>
+                      <div className="mb-3 flex items-center justify-between">
+                        <h4 className="text-xs font-semibold text-zinc-300">{tx("SKU 款式图", "SKU Style Images")}</h4>
+                      </div>
+                      <p className="mb-4 text-xs text-zinc-500">
+                        {tx(
+                          "先生成 SKU 1 作为构图母版，再按顺序基于母版生成其余 SKU；统一约 45° 俯拍、朝向和构图。",
+                          "SKU 1 is generated as the composition master, then the remaining SKUs follow the same 45° top-down angle, orientation, and composition.",
+                        )}
+                      </p>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                        {styleJob.styleImages.map((slot) => (
+                          <article
+                            key={slot.id}
+                            className="overflow-hidden rounded-lg border border-white/10"
+                          >
+                            <div className="aspect-square bg-white">
+                              {slot.resultUrl ? (
+                                <img
+                                  src={slot.resultUrl}
+                                  alt={`SKU ${slot.skuIndex + 1} style image`}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full items-center justify-center text-xs text-zinc-600">
+                                  {slot.status === "fail" ? (
+                                    slot.error || copy.failed
+                                  ) : (
+                                    <Loader2 size={22} className="animate-spin" />
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between p-3 text-xs">
+                              <span className="font-mono text-[11px]">
+                                {getStyleSkuId(styleJob, slot, skus)}
+                              </span>
+                              <span className="flex gap-3">
+                                <span className="flex items-center gap-1.5 text-lime-200">
+                                  <button
+                                    type="button"
+                                    aria-label={
+                                      copiedSkuId === slot.id
+                                        ? tx("已复制 SKU ID", "SKU ID copied")
+                                        : tx(`复制 ${getStyleSkuId(styleJob, slot, skus)}`, `Copy ${getStyleSkuId(styleJob, slot, skus)}`)
+                                    }
+                                    title={
+                                      copiedSkuId === slot.id
+                                        ? tx("已复制 SKU ID", "SKU ID copied")
+                                        : tx(`复制 ${getStyleSkuId(styleJob, slot, skus)}`, `Copy ${getStyleSkuId(styleJob, slot, skus)}`)
+                                    }
+                                    onClick={() =>
+                                      void copySkuId(
+                                        slot.id,
+                                        getStyleSkuId(styleJob, slot, skus),
+                                      )
+                                    }
+                                    className={
+                                      copiedSkuId === slot.id
+                                        ? "flex items-center gap-1 text-lime-200"
+                                        : "flex items-center gap-1 text-zinc-400 hover:text-lime-200"
+                                    }
+                                  >
+                                    {copiedSkuId === slot.id ? (
+                                      <Check size={12} />
+                                    ) : (
+                                      <CopyIcon size={12} />
+                                    )}
+                                  </button>
+                                </span>
+                                {slot.resultUrl ? (
+                                  <a
+                                    href={slot.resultUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    download
+                                    aria-label={`下载 ${getStyleSkuId(styleJob, slot, skus)}`}
+                                    title={`下载 ${getStyleSkuId(styleJob, slot, skus)}`}
+                                    className="text-zinc-300 hover:text-lime-200"
+                                  >
+                                    <Download size={13} />
+                                  </a>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => openStyleRegenerate(slot)}
+                                  aria-label={`重新生成 ${getStyleSkuId(styleJob, slot, skus)}`}
+                                  title={`重新生成 ${getStyleSkuId(styleJob, slot, skus)}`}
+                                  className="text-lime-200 hover:text-white"
+                                >
+                                  <RefreshCw size={13} />
+                                </button>
+                              </span>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
               {storyboardJob ? (
                 <section className="rounded-lg border border-white/10 bg-black/20 p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-semibold">视频分镜图</h3>
+                      <h3 className="text-sm font-semibold">{tx("视频素材生成", "Video Asset Generation")}</h3>
                       <p className="mt-1 text-xs text-zinc-500">
-                        3 个不同卖点，基于厂家参考图生成真实镜头，统一英文五列表格格式，9:16；每张可单独生成
-                        15 秒视频。
+                        {tx(
+                          "3 个不同卖点，基于厂家参考图生成真实镜头，统一 9:16 格式；每张可单独生成 15 秒视频。",
+                          "Three selling points based on manufacturer references, in a consistent 9:16 format; each image can generate a separate 15-second video.",
+                        )}
                       </p>
                     </div>
-                    <Status status={statuses.storyboard} />
+                    <Status status={statuses.storyboard} language={language} />
                   </div>
                   <div className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
                     <div className="rounded-lg border border-white/10 bg-black/20 p-3">
                       <div className="mb-2 flex items-center justify-between text-xs font-semibold text-zinc-300">
-                        <span>短视频封面 · 9:16</span>
+                        <span>{tx("短视频封面 · 3:4", "Short Video Cover · 3:4")}</span>
                         {storyboardJob.cover?.status ? (
-                          <ImageStatus status={storyboardJob.cover.status} />
+                          <ImageStatus status={storyboardJob.cover.status} language={language} />
                         ) : null}
                       </div>
                       {storyboardJob.cover?.resultUrl ? (
@@ -1644,7 +2325,7 @@ export default function EcommerceAssetsPage() {
                           <img
                             src={storyboardJob.cover.resultUrl}
                             alt="Short video cover"
-                            className="aspect-[9/16] w-full cursor-zoom-in object-cover"
+                            className="aspect-[3/4] w-full cursor-zoom-in object-cover"
                           />
                         </div>
                       ) : (
@@ -1663,32 +2344,36 @@ export default function EcommerceAssetsPage() {
                             download
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:text-lime-200"
+                            aria-label={tx("下载视频封面", "Download Video Cover")}
+                            title={tx("下载视频封面", "Download Video Cover")}
+                            className="inline-flex items-center justify-center rounded-md border border-white/10 p-1.5 text-zinc-300 transition-colors hover:text-lime-200"
                           >
                             <Download size={13} />
-                            下载封面
                           </a>
                         ) : null}
                         <button
                           type="button"
                           onClick={() => void regenerateStoryboardCover()}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:text-lime-200"
+                          aria-label={tx("重新生成视频封面", "Regenerate Video Cover")}
+                          title={tx("重新生成视频封面", "Regenerate Video Cover")}
+                          className="inline-flex items-center justify-center rounded-md border border-white/10 p-1.5 text-zinc-300 transition-colors hover:text-lime-200"
                         >
                           <RefreshCw size={13} />
-                          重新生成封面
                         </button>
                       </div>
                     </div>
                     <div className="space-y-3 rounded-lg border border-white/10 bg-black/20 p-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-zinc-300">
-                          短视频发布信息 · 45 秒
+                          {tx("短视频发布信息 · 45 秒", "Short Video Publishing Info · 45 sec")}
                         </span>
                         <button
                           type="button"
                           disabled={regeneratingStoryboardMetadata}
                           onClick={() => void regenerateStoryboardMetadata()}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:text-lime-200 disabled:cursor-wait disabled:opacity-60"
+                          aria-label={tx("重新生成发布文案", "Regenerate Publishing Copy")}
+                          title={tx("重新生成发布文案", "Regenerate Publishing Copy")}
+                          className="inline-flex items-center justify-center rounded-md border border-white/10 p-1.5 text-zinc-300 transition-colors hover:text-lime-200 disabled:cursor-wait disabled:opacity-60"
                         >
                           <RefreshCw
                             size={13}
@@ -1698,19 +2383,16 @@ export default function EcommerceAssetsPage() {
                                 : undefined
                             }
                           />
-                          {regeneratingStoryboardMetadata
-                            ? "生成中…"
-                            : "重新生成文案"}
                         </button>
                       </div>
                       <div>
                         <label className="mb-1 block text-xs text-zinc-500">
-                          Title
+                          {tx("标题", "Title")}
                         </label>
                         <div className="flex gap-2">
                           {regeneratingStoryboardMetadata ? (
                             <div
-                              aria-label="Title generating"
+                              aria-label={tx("标题生成中", "Title generating")}
                               className="h-10 min-w-0 flex-1 animate-pulse rounded-md border border-white/10 bg-gradient-to-r from-white/5 via-white/15 to-white/5"
                             />
                           ) : (
@@ -1730,21 +2412,22 @@ export default function EcommerceAssetsPage() {
                             type="button"
                             disabled={regeneratingStoryboardMetadata}
                             onClick={() => void copyStoryboardMetadata("title")}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:text-lime-200 disabled:cursor-wait disabled:opacity-40"
+                            aria-label={copiedStoryboardTitle ? tx("已复制标题", "Title copied") : tx("复制标题", "Copy title")}
+                            title={copiedStoryboardTitle ? tx("已复制标题", "Title copied") : tx("复制标题", "Copy title")}
+                            className="inline-flex items-center justify-center rounded-md border border-white/10 p-2 text-zinc-300 transition-colors hover:text-lime-200 disabled:cursor-wait disabled:opacity-40"
                           >
                             {copiedStoryboardTitle ? <Check size={13} /> : <CopyIcon size={13} />}
-                            {copiedStoryboardTitle ? "已复制" : "复制"}
                           </button>
                         </div>
                       </div>
                       <div>
                         <label className="mb-1 block text-xs text-zinc-500">
-                          Description · 5 hashtags
+                          {tx("描述 · 5 个标签", "Description · 5 hashtags")}
                         </label>
                         <div className="flex items-start gap-2">
                           {regeneratingStoryboardMetadata ? (
                             <div
-                              aria-label="Description generating"
+                              aria-label={tx("描述生成中", "Description generating")}
                               className="min-h-[144px] min-w-0 flex-1 animate-pulse rounded-md border border-white/10 bg-gradient-to-b from-white/5 via-white/15 to-white/5"
                             />
                           ) : (
@@ -1773,10 +2456,11 @@ export default function EcommerceAssetsPage() {
                             type="button"
                             disabled={regeneratingStoryboardMetadata}
                             onClick={() => void copyStoryboardMetadata("description")}
-                            className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:text-lime-200 disabled:cursor-wait disabled:opacity-40"
+                            aria-label={copiedStoryboardDescription ? tx("已复制描述", "Description copied") : tx("复制描述", "Copy description")}
+                            title={copiedStoryboardDescription ? tx("已复制描述", "Description copied") : tx("复制描述", "Copy description")}
+                            className="inline-flex items-center justify-center rounded-md border border-white/10 p-2 text-zinc-300 transition-colors hover:text-lime-200 disabled:cursor-wait disabled:opacity-40"
                           >
                             {copiedStoryboardDescription ? <Check size={13} /> : <CopyIcon size={13} />}
-                            {copiedStoryboardDescription ? "已复制" : "复制"}
                           </button>
                         </div>
                       </div>
@@ -1791,19 +2475,19 @@ export default function EcommerceAssetsPage() {
                         <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
                           <span className="truncate text-xs font-semibold text-white">
                             {slot.stage === "continuation"
-                              ? "2 · 承接"
+                              ? tx("2 · 承接", "2 · Continuation")
                               : slot.stage === "closing"
-                                ? "3 · 收束"
-                                : "1 · 开场"}{" "}
+                                ? tx("3 · 收束", "3 · Closing")
+                                : tx("1 · 开场", "1 · Opening")}{" "}
                             {slot.sellingPoint.title}
                           </span>
-                          <ImageStatus status={slot.status} />
+                          <ImageStatus status={slot.status} language={language} />
                         </div>
                         {slot.resultUrl ? (
                           <div className="group relative z-0 bg-white transition-transform duration-300 ease-out group-hover:z-20 group-hover:scale-110 group-hover:shadow-2xl">
                             <img
                               src={slot.resultUrl}
-                              alt={`Storyboard ${slot.index + 1}`}
+                              alt={`${tx("视频素材图", "Video Asset")} ${slot.index + 1}`}
                               className="aspect-[9/16] w-full cursor-zoom-in object-cover"
                             />
                           </div>
@@ -1825,21 +2509,14 @@ export default function EcommerceAssetsPage() {
                               <button
                                 type="button"
                                 onClick={() => void copyStoryboardImage(slot)}
-                                className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-zinc-300 transition-colors hover:text-lime-200"
+                                aria-label={copiedStoryboardId === slot.id ? tx("已复制视频素材图", "Video asset copied") : tx("复制视频素材图", "Copy video asset")}
+                                title={copiedStoryboardId === slot.id ? tx("已复制视频素材图", "Video asset copied") : tx("复制视频素材图", "Copy video asset")}
+                                className="inline-flex items-center justify-center rounded-md border border-white/10 p-1.5 text-zinc-300 transition-colors hover:text-lime-200"
                               >
                                 {copiedStoryboardId === slot.id ? (
-                                  <>
-                                    <Check
-                                      size={13}
-                                      className="text-lime-200"
-                                    />
-                                    已复制
-                                  </>
+                                  <Check size={13} className="text-lime-200" />
                                 ) : (
-                                  <>
-                                    <CopyIcon size={13} />
-                                    复制图片
-                                  </>
+                                  <CopyIcon size={13} />
                                 )}
                               </button>
                             ) : null}
@@ -1850,10 +2527,12 @@ export default function EcommerceAssetsPage() {
                                   slot.video?.status === "processing" ||
                                   creatingStoryboardVideoId === slot.id
                                 }
+                              aria-label={slot.video?.status === "fail" ? tx("重试视频", "Retry video") : tx("生成视频", "Generate video")}
+                              title={slot.video?.status === "fail" ? tx("重试视频", "Retry video") : tx("生成视频", "Generate video")}
                               onClick={() =>
                                 void createStoryboardVideo(slot.id)
                               }
-                              className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-zinc-300 transition-colors hover:text-lime-200 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="inline-flex items-center justify-center rounded-md border border-white/10 p-1.5 text-zinc-300 transition-colors hover:text-lime-200 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               {slot.video?.status === "processing" ||
                               creatingStoryboardVideoId === slot.id ? (
@@ -1861,9 +2540,6 @@ export default function EcommerceAssetsPage() {
                               ) : (
                                 <Film size={13} />
                               )}
-                              {slot.video?.status === "fail"
-                                ? "重试视频"
-                                : "生成视频"}
                             </button>
                             {slot.resultUrl || slot.status === "fail" ? (
                               <button
@@ -1871,10 +2547,11 @@ export default function EcommerceAssetsPage() {
                                 onClick={() =>
                                   void regenerateStoryboard(slot.id)
                                 }
-                                className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-zinc-300 transition-colors hover:text-lime-200"
+                                aria-label={tx("重新生成视频素材图", "Regenerate video asset")}
+                                title={tx("重新生成视频素材图", "Regenerate video asset")}
+                                className="inline-flex items-center justify-center rounded-md border border-white/10 p-1.5 text-zinc-300 transition-colors hover:text-lime-200"
                               >
                                 <RefreshCw size={13} />
-                                重新生成分镜
                               </button>
                             ) : null}
                           </div>
@@ -1891,10 +2568,11 @@ export default function EcommerceAssetsPage() {
                                 download
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:text-lime-200"
+                                aria-label={tx("下载视频", "Download video")}
+                                title={tx("下载视频", "Download video")}
+                                className="inline-flex items-center justify-center rounded-md border border-white/10 p-1.5 text-zinc-300 transition-colors hover:text-lime-200"
                               >
                                 <Download size={13} />
-                                下载视频
                               </a>
                             </div>
                           ) : slot.video?.status === "processing" ? (
@@ -1904,126 +2582,18 @@ export default function EcommerceAssetsPage() {
                               </div>
                               <div>
                                 <p className="text-sm font-medium text-zinc-200">
-                                  视频生成中…
+                                  {tx("视频生成中…", "Video generating…")}
                                 </p>
                                 <p className="mt-1 text-xs text-zinc-500">
-                                  完成后会在这里显示预览
+                                  {tx("完成后会在这里显示预览", "The preview will appear here when ready")}
                                 </p>
                               </div>
                             </div>
                           ) : slot.video?.status === "fail" ? (
                             <p className="text-xs text-red-300">
-                              {slot.video.error || "视频生成失败"}
+                              {slot.video.error || tx("视频生成失败", "Video generation failed")}
                             </p>
                           ) : null}
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-              {styleJob ? (
-                <section className="rounded-lg border border-white/10 bg-black/20 p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">SKU 款式图</h3>
-                    <div className="flex items-center gap-3">
-                      <Status status={statuses.style} />
-                      {styleJob.status === "completed" ? (
-                        <button
-                          type="button"
-                          onClick={() => void downloadStyleZip()}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-lime-300/30 px-3 py-1.5 text-xs font-semibold text-lime-200 hover:bg-lime-300/10"
-                        >
-                          <Download size={13} />
-                          下载 ZIP
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                  <p className="mb-4 text-xs text-zinc-500">
-                    先生成 SKU 1 作为构图母版，再按顺序基于母版生成其余
-                    SKU；统一约 45° 俯拍、朝向和构图。
-                  </p>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {styleJob.styleImages.map((slot) => (
-                      <article
-                        key={slot.id}
-                        className="overflow-hidden rounded-lg border border-white/10"
-                      >
-                        <div className="aspect-square bg-white">
-                          {slot.resultUrl ? (
-                            <img
-                              src={slot.resultUrl}
-                              alt={`SKU ${slot.skuIndex + 1} style image`}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-xs text-zinc-600">
-                              {slot.status === "fail" ? (
-                                slot.error || copy.failed
-                              ) : (
-                                <Loader2 size={22} className="animate-spin" />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between p-3 text-xs">
-                          <span className="font-mono text-[11px]">
-                            {getStyleSkuId(styleJob, slot, skus)}
-                          </span>
-                          <span className="flex gap-3">
-                            <span className="flex items-center gap-1.5 text-lime-200">
-                              <span className="font-mono text-[11px]">
-                                {getStyleSkuId(styleJob, slot, skus)}
-                              </span>
-                              <button
-                                type="button"
-                                aria-label={
-                                  copiedSkuId === slot.id
-                                    ? "已复制 SKU ID"
-                                    : `复制 ${getStyleSkuId(styleJob, slot, skus)}`
-                                }
-                                onClick={() =>
-                                  void copySkuId(
-                                    slot.id,
-                                    getStyleSkuId(styleJob, slot, skus),
-                                  )
-                                }
-                                className={
-                                  copiedSkuId === slot.id
-                                    ? "flex items-center gap-1 text-lime-200"
-                                    : "flex items-center gap-1 text-zinc-400 hover:text-lime-200"
-                                }
-                              >
-                                {copiedSkuId === slot.id ? (
-                                  <>
-                                    <Check size={12} />
-                                    <span>已复制</span>
-                                  </>
-                                ) : (
-                                  <CopyIcon size={12} />
-                                )}
-                              </button>
-                            </span>
-                            {slot.resultUrl ? (
-                              <a
-                                href={slot.resultUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                download
-                                className="text-zinc-300"
-                              >
-                                {copy.download}
-                              </a>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={() => openStyleRegenerate(slot)}
-                              className="text-lime-200"
-                            >
-                              <RefreshCw size={13} />
-                            </button>
-                          </span>
                         </div>
                       </article>
                     ))}
@@ -2034,6 +2604,104 @@ export default function EcommerceAssetsPage() {
           </Panel>
         </div>
       </div>
+      {historyOpen ? (
+        <div className="fixed inset-0 z-50 bg-black/75 p-5">
+          <aside className="ml-auto flex h-full w-full max-w-lg flex-col rounded-xl border border-white/10 bg-[#171716] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 p-5">
+              <div>
+                <h2 className="text-lg font-semibold text-white">{tx("历史记录", "History")}</h2>
+                <p className="mt-1 text-xs text-zinc-500">
+                  {tx(`最近保留 ${ECOMMERCE_HISTORY_LIMIT} 条商品生成记录。`, `The latest ${ECOMMERCE_HISTORY_LIMIT} product generation records are kept.`)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(false)}
+                className="rounded-full p-2 text-zinc-400 hover:bg-white/10 hover:text-white"
+              >
+                <X size={17} />
+              </button>
+            </div>
+            <div className="border-b border-white/10 p-5">
+              <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-zinc-400">
+                <Search size={15} />
+                <input
+                  value={historyQuery}
+                  onChange={(event) => setHistoryQuery(event.target.value)}
+                  placeholder={tx("搜索产品名称或 SKU ID", "Search product name or SKU ID")}
+                  className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
+                />
+              </label>
+            </div>
+            <div className="flex-1 space-y-3 overflow-y-auto p-5">
+              {visibleHistoryRecords.length ? (
+                visibleHistoryRecords.map((record) => (
+                    <article
+                      key={record.id}
+                      className="rounded-lg border border-white/10 bg-black/20 p-3 transition-colors hover:border-lime-300/30"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => restoreHistoryRecord(record)}
+                        className="flex w-full items-start gap-3 text-left"
+                      >
+                        {record.thumbnails[0] ? (
+                          <img
+                            src={record.thumbnails[0]}
+                            alt={record.productName}
+                            className="h-16 w-16 shrink-0 rounded-md bg-white object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md bg-white/5 text-zinc-600">
+                            <Sparkles size={18} />
+                          </div>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-white">
+                            {record.productName}
+                          </span>
+                          <span className="mt-1 block text-[11px] text-zinc-500">
+                            {new Date(record.updatedAt).toLocaleString(language === "en" ? "en-US" : "zh-CN")}
+                          </span>
+                          <span className="mt-2 block text-[11px] text-zinc-500">
+                            {tx("点击查看这个商品的全部生成内容", "Click to view all generated content for this product")}
+                          </span>
+                        </span>
+                        <span className="pt-1 text-zinc-500">
+                          <ChevronRight size={16} />
+                        </span>
+                      </button>
+                      <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
+                        <span className={`text-[11px] ${record.status === "completed" ? "text-lime-200" : record.status === "failed" ? "text-red-300" : "text-zinc-400"}`}>
+                          {record.status === "completed"
+                            ? tx("已完成", "Completed")
+                            : record.status === "failed"
+                              ? tx("生成失败", "Generation failed")
+                              : record.status === "partial"
+                                ? tx("部分完成", "Partially completed")
+                                : tx("生成中", "Processing")}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => deleteHistoryRecord(record.id)}
+                          aria-label="删除历史记录"
+                          title="删除历史记录"
+                          className="inline-flex items-center justify-center p-1 text-zinc-500 hover:text-red-300"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </article>
+                  ))
+              ) : (
+                <div className="py-16 text-center text-sm text-zinc-500">
+                  {tx("暂无匹配的历史记录", "No matching history records")}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      ) : null}
       {configOpen ? (
         <div className="fixed inset-0 z-50 bg-black/75 p-5">
           <div className="ml-auto h-full w-full max-w-xl overflow-y-auto rounded-xl border border-white/10 bg-[#171716] p-5 shadow-2xl">
@@ -2043,7 +2711,7 @@ export default function EcommerceAssetsPage() {
                   {copy.config}
                 </h2>
                 <p className="mt-1 text-xs text-zinc-500">
-                  保存后只影响下一次生成。
+                  {tx("保存后只影响下一次生成。", "Changes apply to the next generation only.")}
                 </p>
               </div>
               <button
@@ -2055,7 +2723,7 @@ export default function EcommerceAssetsPage() {
               </button>
             </div>
             <label className="mt-6 block text-xs font-semibold text-zinc-300">
-              全局风格限定
+              {tx("全局风格限定", "Global Style Guide")}
               <textarea
                 value={config.styleGuide}
                 onChange={(event) =>
@@ -2072,13 +2740,13 @@ export default function EcommerceAssetsPage() {
               >
                 <h3 className="text-sm font-semibold text-white">
                   {key === "person"
-                    ? "人物参考"
+                    ? tx("人物参考", "Person Reference")
                     : key === "logo"
-                      ? "店铺 Logo"
-                      : "主图构图参考"}
+                      ? tx("店铺 Logo", "Store Logo")
+                      : tx("主图构图参考", "Main Image Composition")}
                 </h3>
                 <label className="mt-3 block text-xs text-zinc-400">
-                  图片 URL
+                  {tx("图片 URL", "Image URL")}
                   <input
                     value={config[key].imageUrl}
                     onChange={(event) =>
@@ -2091,7 +2759,7 @@ export default function EcommerceAssetsPage() {
                   />
                 </label>
                 <label className="mt-3 block text-xs text-zinc-400">
-                  使用 Prompt
+                  {tx("使用 Prompt", "Prompt")}
                   <textarea
                     value={config[key].prompt}
                     onChange={(event) =>
@@ -2106,10 +2774,10 @@ export default function EcommerceAssetsPage() {
                 </label>
                 <p className="mt-2 text-[11px] text-zinc-500">
                   {key === "logo"
-                    ? "第一张主图不会使用 Logo；款式图不会使用 Logo。"
+                    ? tx("第一张主图不会使用 Logo；款式图不会使用 Logo。", "The first main image and SKU style images do not use the logo.")
                     : key === "person"
-                      ? "人物只用于第一张主图。"
-                      : "构图参考只用于第一张主图。"}
+                      ? tx("人物只用于第一张主图。", "The person reference is used only for the first main image.")
+                      : tx("构图参考只用于第一张主图。", "The composition reference is used only for the first main image.")}
                 </p>
               </div>
             ))}
@@ -2118,8 +2786,100 @@ export default function EcommerceAssetsPage() {
               onClick={() => setConfigOpen(false)}
               className="mt-5 w-full rounded-lg bg-lime-300 px-4 py-3 text-sm font-semibold text-zinc-950"
             >
-              保存配置
+              {tx("保存配置", "Save Settings")}
             </button>
+          </div>
+        </div>
+      ) : null}
+      {pricingConfigOpen ? (
+        <div className="fixed inset-0 z-50 bg-black/75 p-5">
+          <div className="ml-auto h-full w-full max-w-xl overflow-y-auto rounded-xl border border-white/10 bg-[#171716] p-5 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white">{tx("价格配置", "Pricing Settings")}</h2>
+                <p className="mt-1 text-xs text-zinc-500">{tx("生成时只需填写商品成本和重量，其他定价参数使用这里的配置。", "During generation, enter only product cost and weight; other pricing parameters use these settings.")}</p>
+              </div>
+              <button type="button" onClick={() => setPricingConfigOpen(false)} className="rounded-full p-2 text-zinc-400 hover:bg-white/10"><X size={17} /></button>
+            </div>
+            <div className="mt-6 rounded-lg border border-white/10 p-4">
+              <h3 className="text-sm font-semibold text-white">{tx("目标国家", "Target Markets")}</h3>
+              <div className="mt-3 flex gap-3">
+                {(["SG", "MY"] as const).map((country) => {
+                  const active = pricingConfig.countries.includes(country);
+                  return (
+                    <label key={country} className={`flex flex-1 cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm ${active ? "border-lime-300/60 bg-lime-300/10 text-lime-100" : "border-white/10 text-zinc-400"}`}>
+                      <input
+                        type="checkbox"
+                        checked={active}
+                        onChange={(event) =>
+                          updatePricingConfig({
+                            countries: event.target.checked
+                              ? [...pricingConfig.countries, country].filter((value, index, values) => values.indexOf(value) === index)
+                              : pricingConfig.countries.filter((value) => value !== country),
+                          })
+                        }
+                        className="accent-lime-300"
+                      />
+                      {country === "SG" ? tx("新加坡（SGD）", "Singapore (SGD)") : tx("马来西亚（MYR）", "Malaysia (MYR)")}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              {[
+                [tx("包装 / 国内段成本（人民币）", "Packaging / Domestic Cost (RMB)"), "packagingCostRmb", pricingConfig.packagingCostRmb, "RMB"],
+                [tx("买家支付比例（4折=40%）", "Buyer Pay Percent (40% at 4x discount)"), "buyerPayPercent", pricingConfig.buyerPayPercent, "%"],
+                [tx("目标利润 / 成本", "Target Margin / Cost"), "targetMarginPercent", pricingConfig.targetMarginPercent, "%"],
+                [tx("达人佣金（不用填 0）", "Affiliate Commission (enter 0 if unused)"), "affiliateRate", pricingConfig.affiliateRate, "%"],
+              ].map(([label, key, value, suffix]) => (
+                <label key={key} className="text-xs text-zinc-400">
+                  {label}
+                  <div className="mt-2 flex items-center rounded-lg border border-white/10 bg-black/30 px-3">
+                    <input
+                      type="number"
+                      min="0"
+                      value={String(value)}
+                      onChange={(event) => updatePricingConfig({ [key]: Number(event.target.value) } as Partial<EcommercePricingConfig>)}
+                      className="w-full bg-transparent py-2.5 text-sm text-white outline-none"
+                    />
+                    <span className="text-xs text-zinc-600">{suffix}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="mt-6 space-y-4">
+              {(["SG", "MY"] as const).map((country) => {
+                const market = pricingConfig.markets[country];
+                return (
+                  <div key={country} className="rounded-lg border border-white/10 p-4">
+                    <h3 className="text-sm font-semibold text-white">{country === "SG" ? tx("新加坡", "Singapore") : tx("马来西亚", "Malaysia")} · {tx("费率、汇率与物流", "Rates, Exchange & Logistics")}</h3>
+                    <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                      {([
+                        [tx("人民币 / 当地币", "RMB / Local Currency"), "exchangeRateRmbPerLocal", market.exchangeRateRmbPerLocal, ""],
+                        [tx("平台佣金", "Platform Commission"), "commissionRate", market.commissionRate, "%"],
+                        [tx("交易费", "Transaction Fee"), "transactionRate", market.transactionRate, "%"],
+                        [tx("每单支持费", "Per-order Support Fee"), "supportFee", market.supportFee, market.currency],
+                      ] as const).map(([label, key, value, suffix]) => (
+                        <label key={key} className="text-xs text-zinc-400">
+                          {label}
+                          <div className="mt-2 flex items-center rounded-lg border border-white/10 bg-black/30 px-3">
+                            <input type="number" min="0" value={String(value)} onChange={(event) => updatePricingMarket(country, { [key]: Number(event.target.value) } as Partial<TikTokPricingMarketInput>)} className="w-full bg-transparent py-2.5 text-sm text-white outline-none" />
+                            <span className="text-xs text-zinc-600">{suffix}</span>
+                          </div>
+                        </label>
+                      ))}
+                      <label className="text-xs text-zinc-400">{tx("税务身份", "Tax Profile")}<select value={market.taxProfile} onChange={(event) => updatePricingMarket(country, { taxProfile: event.target.value as TikTokPricingMarketInput["taxProfile"] })} className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white"><option value="individual">{tx("个人 / 个体户", "Individual")}</option><option value="corporate">{tx("公司", "Company")}</option></select></label>
+                      <label className="text-xs text-zinc-400">{tx("地区 / 区域", "Region")}<select value={market.region} onChange={(event) => updatePricingMarket(country, { region: event.target.value as TikTokPricingMarketInput["region"] })} className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white">{(country === "MY" ? [["west", tx("西马", "West Malaysia")], ["east", tx("东马", "East Malaysia")]] : [["default", tx("全境", "All regions")]]).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                      <label className="text-xs text-zinc-400">{tx("物流渠道", "Logistics Channel")}<select value={market.channel} onChange={(event) => updatePricingMarket(country, { channel: event.target.value as TikTokPricingMarketInput["channel"] })} className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white"><option value="Standard">Standard</option><option value="Economy">Economy</option></select></label>
+                      <label className="text-xs text-zinc-400">{tx("自定义卖家运费（可选）", "Custom Seller Shipping (Optional)")}<input type="number" min="0" value={market.logisticsOverride === undefined ? "" : String(market.logisticsOverride)} onChange={(event) => updatePricingMarket(country, { logisticsOverride: event.target.value.trim() === "" ? undefined : Number(event.target.value) })} placeholder={tx("留空使用新价卡", "Leave blank to use rate card")} className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white" /></label>
+                      <label className="flex items-center gap-2 text-xs text-zinc-300 sm:col-span-2"><input type="checkbox" checked={market.includeLocalDeliveryCost} onChange={(event) => updatePricingMarket(country, { includeLocalDeliveryCost: event.target.checked })} className="accent-lime-300" />{tx("我也承担买家下单时支付的当地派送费", "I also cover the local delivery fee paid by the buyer")}</label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <button type="button" onClick={() => setPricingConfigOpen(false)} className="mt-6 w-full rounded-lg bg-lime-300 px-4 py-3 text-sm font-semibold text-zinc-950">{tx("保存价格配置", "Save Pricing Settings")}</button>
           </div>
         </div>
       ) : null}
@@ -2127,7 +2887,7 @@ export default function EcommerceAssetsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-5">
           <div className="w-full max-w-xl rounded-xl border border-white/10 bg-[#171716] p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">重新生成轮播图</h2>
+              <h2 className="text-lg font-semibold">{tx("重新生成轮播图", "Regenerate Carousel Image")}</h2>
               <button type="button" onClick={() => setEditingCarousel(null)}>
                 <X size={17} />
               </button>
@@ -2152,20 +2912,20 @@ export default function EcommerceAssetsPage() {
             <input
               value={editTitle}
               onChange={(event) => setEditTitle(event.target.value)}
-              placeholder="English headline"
+              placeholder={tx("英文标题", "English headline")}
               className="mt-4 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
             />
             <textarea
               value={editSubtitle}
               onChange={(event) => setEditSubtitle(event.target.value)}
-              placeholder="English subheadline"
+              placeholder={tx("英文副标题", "English subheadline")}
               rows={3}
               className="mt-3 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
             />
             <textarea
               value={editRefinement}
               onChange={(event) => setEditRefinement(event.target.value)}
-              placeholder="更改要求（可选）"
+              placeholder={tx("更改要求（可选）", "Refinement (optional)")}
               rows={4}
               className="mt-3 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
             />
@@ -2175,7 +2935,7 @@ export default function EcommerceAssetsPage() {
                 onClick={() => setEditingCarousel(null)}
                 className="rounded-lg border border-white/10 px-4 py-2 text-sm"
               >
-                取消
+                {tx("取消", "Cancel")}
               </button>
               <button
                 type="button"
@@ -2185,7 +2945,7 @@ export default function EcommerceAssetsPage() {
                 onClick={() => void regenerateCarousel()}
                 className="rounded-lg bg-lime-300 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-50"
               >
-                {regenerating ? "生成中…" : "确认重新生成"}
+                {regenerating ? tx("生成中…", "Generating…") : tx("确认重新生成", "Confirm Regeneration")}
               </button>
             </div>
           </div>
@@ -2195,7 +2955,7 @@ export default function EcommerceAssetsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-5">
           <div className="w-full max-w-xl rounded-xl border border-white/10 bg-[#171716] p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">重新生成 SKU 款式图</h2>
+              <h2 className="text-lg font-semibold">{tx("重新生成 SKU 款式图", "Regenerate SKU Style Image")}</h2>
               <button type="button" onClick={() => setEditingStyle(null)}>
                 <X size={17} />
               </button>
@@ -2220,7 +2980,7 @@ export default function EcommerceAssetsPage() {
             <textarea
               value={styleRefinement}
               onChange={(event) => setStyleRefinement(event.target.value)}
-              placeholder="更改要求（可选），例如：产品再大一些，但保持固定俯拍角度。"
+              placeholder={tx("更改要求（可选），例如：产品再大一些，但保持固定俯拍角度。", "Refinement (optional), e.g. make the product larger while keeping the fixed top-down angle.")}
               rows={5}
               className="mt-4 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white"
             />
@@ -2230,7 +2990,7 @@ export default function EcommerceAssetsPage() {
                 onClick={() => setEditingStyle(null)}
                 className="rounded-lg border border-white/10 px-4 py-2 text-sm"
               >
-                取消
+                {tx("取消", "Cancel")}
               </button>
               <button
                 type="button"
@@ -2238,7 +2998,7 @@ export default function EcommerceAssetsPage() {
                 onClick={() => void regenerateStyle()}
                 className="rounded-lg bg-lime-300 px-4 py-2 text-sm font-semibold text-zinc-950 disabled:opacity-50"
               >
-                {regenerating ? "生成中…" : "确认重新生成"}
+                {regenerating ? tx("生成中…", "Generating…") : tx("确认重新生成", "Confirm Regeneration")}
               </button>
             </div>
           </div>

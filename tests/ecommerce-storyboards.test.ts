@@ -117,12 +117,20 @@ test("storyboard cover prompt renders one clean title without the store name", (
       ],
     }),
   });
-  assert.match(prompt, /9:16/);
+  assert.match(prompt, /3:4/);
   assert.match(prompt, /The Pocket Fan I actually Carry/i);
   assert.match(prompt, /pure white background/i);
   assert.match(prompt, /oversized black headline/i);
   assert.match(prompt, /no obvious empty space/i);
   assert.match(prompt, /Do not render CHUB TWO/);
+  assert.match(prompt, /adult male creator/i);
+  assert.match(prompt, /must be male/i);
+});
+
+test("storyboard video prompt requires an adult male creator and male voice", () => {
+  const prompt = buildStoryboardVideoPrompt({ slot, storyPlan: normalizeStoryboardStoryPlan({}) });
+  assert.match(prompt, /adult male voice/i);
+  assert.match(prompt, /never use a woman/i);
 });
 
 test("storyboard create rejects a missing first SKU", async () => {

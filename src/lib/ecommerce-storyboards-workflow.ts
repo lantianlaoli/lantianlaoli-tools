@@ -22,6 +22,7 @@ import type {
   EcommerceSlotStatus,
   EcommerceStoryboardJob,
   EcommerceStoryboardSlot,
+  EcommerceStoryboardVideoProvider,
 } from "./types";
 
 function isTerminal(status: EcommerceSlotStatus) {
@@ -135,7 +136,7 @@ export async function createEcommerceStoryboardJob(input: {
             ...productViewImageUrls,
             personImageUrl,
           ],
-          aspectRatio: "9:16",
+          aspectRatio: "3:4",
           resolution: "1K",
         });
       })(),
@@ -241,32 +242,41 @@ export async function refreshEcommerceStoryboardJob(
 export async function createEcommerceStoryboardVideo(input: {
   job: EcommerceStoryboardJob;
   slotId: string;
+  provider?: EcommerceStoryboardVideoProvider;
 }) {
   const slot = input.job.slots.find(
     (candidate) => candidate.id === input.slotId,
   );
   if (!slot?.resultUrl)
     throw new Error("A completed storyboard image is required.");
+  const provider = "seedance-2-mini" as const;
   const prompt = buildStoryboardVideoPrompt({
     slot,
     storyPlan: input.job.storyPlan,
   });
+  const referenceImageUrls = [
+    input.job.productSkuImageUrl,
+    ...(input.job.productViewImageUrls || []),
+    input.job.personImageUrl,
+  ];
   const taskId = await createKieSeedance2MiniVideoTask({
     prompt,
-    referenceImageUrls: [
-      slot.resultUrl,
-      input.job.productSkuImageUrl,
-      ...(input.job.productViewImageUrls || []),
-      input.job.personImageUrl,
-    ],
+    referenceImageUrls: [slot.resultUrl, ...referenceImageUrls],
   });
+  const model = "bytedance/seedance-2-mini" as const;
   const updatedJob = {
     ...input.job,
     slots: input.job.slots.map((candidate) =>
       candidate.id === slot.id
         ? {
             ...candidate,
-            video: { taskId, status: "processing" as const, prompt },
+            video: {
+              taskId,
+              provider,
+              model,
+              status: "processing" as const,
+              prompt,
+            },
           }
         : candidate,
     ),
@@ -304,7 +314,7 @@ export async function regenerateEcommerceStoryboardMetadata(
       ...(job.productViewImageUrls || []),
       job.personImageUrl,
     ],
-    aspectRatio: "9:16",
+    aspectRatio: "3:4",
     resolution: "1K",
   });
   const updated = {
@@ -337,7 +347,7 @@ export async function regenerateEcommerceStoryboardCover(
       ...(job.productViewImageUrls || []),
       job.personImageUrl,
     ],
-    aspectRatio: "9:16",
+    aspectRatio: "3:4",
     resolution: "1K",
   });
   const updated = {
@@ -361,12 +371,15 @@ export async function refreshEcommerceStoryboardVideo(
       )
         return slot;
       try {
+        const provider = "seedance-2-mini" as const;
         const status = await getKieImageStatus(slot.video.taskId);
         return status.status === "success"
           ? {
               ...slot,
               video: {
                 ...slot.video,
+                provider,
+                model: "bytedance/seedance-2-mini" as const,
                 status: "success" as const,
                 resultUrl: status.resultUrl,
               },
@@ -374,11 +387,13 @@ export async function refreshEcommerceStoryboardVideo(
           : status.status === "fail"
             ? {
                 ...slot,
-                video: {
-                  ...slot.video,
-                  status: "fail" as const,
-                  error: status.error || "Video generation failed.",
-                },
+              video: {
+                ...slot.video,
+                provider,
+                model: "bytedance/seedance-2-mini" as const,
+                status: "fail" as const,
+                error: status.error || "Video generation failed.",
+              },
               }
             : slot;
       } catch (error) {
@@ -386,6 +401,8 @@ export async function refreshEcommerceStoryboardVideo(
           ...slot,
           video: {
             ...slot.video,
+            provider: slot.video.provider || "seedance-2-mini",
+            model: "bytedance/seedance-2-mini" as const,
             status: "fail" as const,
             error:
               error instanceof Error

@@ -33,6 +33,9 @@ ${CHUB_TWO_BRIEF_INTRO}
 
 [Give concise, evidence-based usage steps.]`;
 
+export const PRODUCT_TITLE_FORMULA =
+  "[core product keyword + attribute keyword] + [promotion keyword when explicitly supported] + [benefit keyword] + [audience keyword]";
+
 function imageParts(urls: string[]) {
   return urls.map((url) => ({
     type: "image_url" as const,
@@ -140,7 +143,11 @@ export function buildProductInfoPrompt(input: {
     const titleInstructions = [
       "Generate exactly one final product title.",
       "The title must begin exactly with CHUB TWO｜ and contain at least 40 characters in total.",
-      "After the brand prefix, include the strongest real long-tail product keyword phrase from the manufacturer copy. Keep it concise and readable; do not keyword-stuff.",
+      `Build the title after the brand prefix with this basic structure: ${PRODUCT_TITLE_FORMULA}.`,
+      "Use the strongest real long-tail product keyword phrase from the manufacturer copy as the core of the title.",
+      "Core product keyword and attribute keyword are required. Add a concrete benefit keyword and the real target audience or use context whenever supported by the manufacturer images.",
+      "Use promotion keywords such as new, limited, gift-ready, or sale only when the manufacturer images explicitly support them; never invent a discount, ranking, urgency, or promotional claim.",
+      "Keep the result concise, natural, readable, and scenario-aware. Use each keyword category once where possible; do not keyword-stuff or append irrelevant search terms.",
     ];
     if (input.kind === "all") {
       return [
@@ -178,9 +185,9 @@ function fallbackTitles(): EcommerceProductTitleProposal[] {
     {
       id: "title-1",
       title:
-        "CHUB TWO｜Compact Portable Everyday Tech Gadget for Travel and Work",
+        "CHUB TWO｜Compact Foldable Phone Stand for Hands-Free Viewing at Work and Study",
       rationale:
-        "A single evidence-safe fallback title with a practical long-tail phrase and more than 40 characters.",
+        "Uses a core product keyword, visible attribute, practical benefit, and supported audience contexts without inventing a promotion.",
     },
   ];
 }

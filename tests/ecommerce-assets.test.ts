@@ -23,6 +23,7 @@ import { POST as analyzeEcommerceAssets } from "../src/app/api/ecommerce-assets/
 import { POST as createEcommerceAssets } from "../src/app/api/ecommerce-assets/create/route";
 import { POST as productInfo } from "../src/app/api/ecommerce-assets/product-info/route";
 import { POST as styleImageCreate } from "../src/app/api/ecommerce-assets/style-images/create/route";
+import { normalizeEcommerceHistory } from "../src/lib/ecommerce-history";
 
 const referenceCounts = { scene: 3, detail: 3, variant: 1 } as const;
 const selectedCopy = Object.fromEntries(
@@ -34,6 +35,24 @@ const selectedCopy = Object.fromEntries(
 const group = (role: string, count: number) => ({
   role,
   dataUrls: Array.from({ length: count }, () => "data:image/png;base64,AA=="),
+});
+
+test("ecommerce history normalizes records newest first and caps the list", () => {
+  const records = Array.from({ length: 32 }, (_, index) => ({
+    id: `history-${index}`,
+    productName: `Product ${index}`,
+    skuIds: [],
+    createdAt: index,
+    updatedAt: index,
+    status: "completed" as const,
+    outputKinds: ["info" as const],
+    thumbnails: [],
+    snapshot: {},
+  }));
+  const normalized = normalizeEcommerceHistory(records);
+  assert.equal(normalized.length, 30);
+  assert.equal(normalized[0].id, "history-31");
+  assert.equal(normalized.at(-1)?.id, "history-2");
 });
 const groups = [group("scene", 3), group("detail", 3), group("variant", 1)];
 
@@ -80,6 +99,11 @@ test("product title prompt enforces one long-tail title", () => {
     manufacturerReferenceImageCount: 4,
   });
   assert.match(prompt, /exactly one final product title/);
+  assert.match(prompt, /core product keyword \+ attribute keyword/);
+  assert.match(prompt, /promotion keyword/i);
+  assert.match(prompt, /benefit keyword/);
+  assert.match(prompt, /target audience|audience/i);
+  assert.match(prompt, /never invent a discount/i);
   assert.match(prompt, /at least 40 characters/);
   assert.match(prompt, /CHUB TWO｜/);
   assert.match(prompt, /long-tail product keyword phrase/);

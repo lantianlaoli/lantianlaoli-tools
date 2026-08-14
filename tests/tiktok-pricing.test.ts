@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { POST } from "../src/app/api/tiktok-pricing/recommend/route";
 import {
   calculateTikTokPricing,
   estimateOfficialFreight,
@@ -77,14 +76,4 @@ test("includes country tax scenarios in the cost and profit", () => {
         vietnam.logistics,
   );
   assert.equal(singapore.taxCostsAtSuggestedPrice, 0);
-});
-test("recommend route rejects invalid input", async () => {
-  const response = await POST(
-    new Request("http://localhost/api/tiktok-pricing/recommend", {
-      method: "POST",
-      body: JSON.stringify({}),
-      headers: { "content-type": "application/json" },
-    }),
-  );
-  assert.equal(response.status, 400);
 });

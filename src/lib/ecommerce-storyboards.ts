@@ -239,6 +239,7 @@ export async function analyzeStoryboardStory(input: {
           "Before writing any copy, identify the real target buyer, their repeated usage habit, the frustration or purchase hesitation they have, and the concrete product capability that resolves it. Base this analysis on visible product evidence and manufacturer copy.",
           "Create exactly 3 connected stages of 15 seconds each: opening, continuation, and closing.",
           "Use only verifiable product names, visible selling points, real scenes, and real use cases from the references.",
+          "The creator is an adult male. Keep the on-screen creator male and write all spoken lines for a natural adult male voice; never use a woman, girl, female protagonist, or female voice.",
           "The second stage must continue the first stage's setting, action, and product state. The third stage must continue the second and close the story naturally.",
           "Generate one English title without CHUB TWO. Make it a scenario-led solution to the buyer's pain point, with a curiosity hook and a real product or long-tail use keyword; do not write a generic product label or keyword stack.",
           "Generate one natural English description without CHUB TWO, approximately 300 characters long (acceptable range 240-360 characters). Start from the buyer's real frustration and usage habit, then show how the product fits into a believable everyday moment and resolves that friction.",
@@ -287,6 +288,7 @@ export function buildStoryboardImagePrompt(input: {
   return [
     "Create one finished 9:16 English product storyboard sheet for CHUB TWO.",
     "Use the first input image as the primary SKU reference and the second input image as the only person reference. The next product-view images, when provided, follow this order: front, side, back. They are authoritative appearance references: preserve the product's exact shape, proportions, controls, materials, colors, and construction. Use the remaining manufacturer reference image(s) as factual visual guidance for the actual scene, shot, product use, and visible details. Recreate a believable scene that matches those references; do not invent a different use case.",
+    "The creator is an adult male. Keep the on-screen creator male and never introduce a woman, girl, female protagonist, or female voice.",
     `This storyboard focuses on exactly one selling point: ${point.title}. ${point.description}`,
     story
       ? `Story stage: ${input.slot.stage || "opening"}. Shared setting: ${story.setting}. Shared continuity rule: ${story.continuity}. Visual style: ${story.visualStyle}. Transition from previous stage: ${input.slot.transitionFromPrevious || "Begin naturally."} Transition to next stage: ${input.slot.transitionToNext || "Continue the same action."}`
@@ -313,7 +315,7 @@ export function buildStoryboardVideoPrompt(input: {
       ? `This is the ${input.slot.stage || "opening"} section of one 45-second UGC story. Shared setting: ${story.setting}. Shared continuity rule: ${story.continuity}. Visual style: ${story.visualStyle}. Transition from previous section: ${input.slot.transitionFromPrevious || "Begin naturally."} Transition to next section: ${input.slot.transitionToNext || "Continue the same action."}`
       : "Keep this 15-second video visually compatible with the other two sections.",
     "Animate the six storyboard beats as a coherent sequence: lively product introduction, tactile close-up interaction, clear product use, one satisfying detail moment, a confident hero display, and a natural closing beat.",
-    "Use an authentic person with energetic conversational delivery, natural human voice-over, realistic product handling sounds, light ambient sound, and upbeat but restrained music. The creator should sound like a real person speaking directly to viewers, with clear spontaneous delivery and human energy. Keep the product visually dominant.",
+    "Use the fixed adult male creator with an adult male voice: medium-low natural male timbre, energetic conversational delivery, realistic product handling sounds, light ambient sound, and upbeat but restrained music. The creator should sound like a real man speaking directly to viewers. Never use a woman, girl, female protagonist, or female voice. Keep the product visually dominant.",
     "All spoken lines must use the verified product name or a natural generic product name, never the store name CHUB TWO. Do not mention the store name in dialogue, voice-over, or captions.",
     "English only. Do not add other products, other people, logos, unsupported text, pets, or unrelated props.",
   ].join("\n");
@@ -323,12 +325,12 @@ export function buildStoryboardCoverPrompt(input: {
   storyPlan: EcommerceStoryboardStoryPlan;
 }) {
   return [
-    "Create one finished 9:16 English short-video cover image for an authentic UGC product video.",
-    "Use the provided product and person references to create a realistic, premium but natural UGC frame. Use an Apple-inspired minimalist art direction: pure white background, crisp black typography, precise spacing, restrained visual hierarchy, and no decorative styling.",
+    "Create one finished 3:4 English short-video cover image for an authentic UGC product video.",
+    "Use the provided product and fixed adult male creator reference to create a realistic, premium but natural UGC frame. The person must be male; do not introduce a woman or female character. Use an Apple-inspired minimalist art direction: pure white background, crisp black typography, precise spacing, restrained visual hierarchy, and no decorative styling.",
     "Make every permitted element large and visually decisive. The single title must be an oversized black headline that fills most of the upper half of the frame, using strong readable type, tight composition, and line breaks that use the available width. Do not shrink the title into a small caption.",
-    "Make the person and the single product large in the lower half, with the product clearly readable and occupying substantial frame area. Fill the 9:16 canvas with the title, person, and product; leave only intentional minimal margins and no obvious empty space.",
+    "Make the person and the single product large in the lower half, with the product clearly readable and occupying substantial frame area. Fill the 3:4 canvas with the title, person, and product; leave only intentional minimal margins and no obvious empty space.",
     `Render exactly this short-video title as the only new text, large and prominent: ${input.storyPlan.title}`,
     "Do not render CHUB TWO, a store name, manufacturer logo, watermark, specification wall, extra product, decorative cards, or unrelated props.",
-    "Use English only, 9:16 vertical composition, strong click appeal, concise typography, natural human energy, and accurate product appearance.",
+    "Use English only, 3:4 vertical composition, strong click appeal, concise typography, natural human energy, and accurate product appearance.",
   ].join("\n");
 }
